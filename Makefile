@@ -13,7 +13,7 @@ push-personal:
 	git config user.name "honeycarbs"
 	git config user.email "honeycarbs.personal@email.com"
 	@echo "Pushing final/ subtree to personal repository..."
-	git subtree push --prefix=final personal main
+	git -C .. subtree push --prefix=final personal main
 
 push-all: push-edu push-personal
 	@echo "Pushed to all repositories!"

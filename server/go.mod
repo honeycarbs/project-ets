@@ -1,4 +1,4 @@
-module github.com/you/project-ets
+module github.com/honeycarbs/project-ets
 
 go 1.25.3
 
