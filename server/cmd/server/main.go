@@ -2,12 +2,14 @@ package main
 
 import (
 	"log"
+	"net"
 	"os"
 	"syscall"
 	"time"
 
 	"github.com/honeycarbs/project-ets/internal/config"
 	"github.com/honeycarbs/project-ets/internal/mcp"
+	mcptools "github.com/honeycarbs/project-ets/internal/mcp/tools"
 	"github.com/honeycarbs/project-ets/pkg/logging"
 	"github.com/honeycarbs/project-ets/pkg/shutdown"
 )
@@ -23,6 +25,11 @@ func main() {
 
 	srv := mcp.NewServer(logger, cfg)
 
+	if err := mcptools.RegisterAll(srv); err != nil {
+		logger.Error("failed to register MCP tools", "err", err)
+		os.Exit(1)
+	}
+
 	go shutdown.Graceful(
 		[]os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP},
 		srv,
@@ -30,7 +37,7 @@ func main() {
 		logger,
 	)
 
-	logger.Info("MCP server initialized and starting")
+	logger.Info("MCP server initialized and starting", "addr", net.JoinHostPort(cfg.Host, cfg.Port))
 
 	if err := srv.Run(); err != nil {
 		logger.Error("MCP server exited with error", "err", err)

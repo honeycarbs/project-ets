@@ -1,7 +1,18 @@
 package mcp
 
-import (
-	"encoding/json"
+import "encoding/json"
+
+const (
+	// ErrCodeParse indicates malformed JSON
+	ErrCodeParse = -32700
+	// ErrCodeInvalidRequest indicates invalid JSON-RPC envelope
+	ErrCodeInvalidRequest = -32600
+	// ErrCodeMethodNotFound indicates unknown method name
+	ErrCodeMethodNotFound = -32601
+	// ErrCodeInvalidParams indicates malformed params
+	ErrCodeInvalidParams = -32602
+	// ErrCodeInternal represents an internal server error
+	ErrCodeInternal = -32603
 )
 
 // RPCRequest represents a JSON-RPC 2.0 request

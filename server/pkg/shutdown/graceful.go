@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	_ "syscall"
 	"time"
 
 	"github.com/honeycarbs/project-ets/pkg/logging"
