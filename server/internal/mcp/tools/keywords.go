@@ -26,6 +26,13 @@ type PersistKeywordsParams struct {
 	Records []KeywordRecord `json:"records" jsonschema:"Keyword payloads to persist"`
 }
 
+// PersistKeywordsResult represents a summary of the persist operation
+type PersistKeywordsResult struct {
+	JobIDs       []string `json:"job_ids" jsonschema:"Job identifiers that were processed"`
+	SavedRecords int      `json:"saved_records" jsonschema:"Number of keyword records persisted"`
+	Message      string   `json:"message,omitempty" jsonschema:"Optional status message"`
+}
+
 // WithPersistKeywords registers the persist_keywords tool
 func WithPersistKeywords() Option {
 	return func(reg *registry) {
@@ -40,11 +47,21 @@ func persistKeywords(ctx context.Context, req *sdkmcp.CallToolRequest, params *P
 	_ = ctx
 	_ = req
 
-	count := 0
+	result := PersistKeywordsResult{}
 	if params != nil {
-		count = len(params.Records)
+		result.SavedRecords = len(params.Records)
+		result.JobIDs = make([]string, 0, len(params.Records))
+		for _, record := range params.Records {
+			if record.JobID != "" {
+				result.JobIDs = append(result.JobIDs, record.JobID)
+			}
+		}
 	}
 
-	msg := fmt.Sprintf("[persist_keywords] Stub implementation: received %d record(s)", count)
-	return textResult(msg), nil, nil
+	if result.Message == "" {
+		result.Message = "keywords accepted (stub)"
+	}
+
+	msg := fmt.Sprintf("[persist_keywords] Stub implementation: received %d record(s)", result.SavedRecords)
+	return textResult(msg), result, nil
 }
