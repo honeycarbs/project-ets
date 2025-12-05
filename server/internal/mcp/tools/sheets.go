@@ -20,6 +20,11 @@ type SheetRow struct {
 	UpdatedAt string `json:"updated_at,omitempty" jsonschema:"ISO timestamp captured by client"`
 }
 
+// SheetsClient exports rows to Google Sheets
+type SheetsClient interface {
+	Export(ctx context.Context, params SheetsExportParams) (SheetsExportResult, error)
+}
+
 // SheetsExportParams defines the arguments for the sheets_export tool
 type SheetsExportParams struct {
 	JobIDs   []string          `json:"job_ids,omitempty" jsonschema:"Jobs to rehydrate from storage"`
@@ -45,19 +50,25 @@ type SheetsExportResult struct {
 	Message       string    `json:"message,omitempty" jsonschema:"Optional status message"`
 }
 
+type sheetsExportTool struct {
+	client SheetsClient
+}
+
 // WithSheetsExport registers the sheets_export tool
-func WithSheetsExport() Option {
+func WithSheetsExport(client SheetsClient) Option {
 	return func(reg *registry) {
+		handler := sheetsExportTool{client: client}
 		sdkmcp.AddTool(reg.server, &sdkmcp.Tool{
 			Name:        "sheets_export",
 			Description: "Export job selections to Google Sheets via the sheets_client integrations",
-		}, sheetsExport)
+		}, handler.handle)
 	}
 }
 
-func sheetsExport(ctx context.Context, req *sdkmcp.CallToolRequest, params *SheetsExportParams) (*sdkmcp.CallToolResult, any, error) {
+func (t sheetsExportTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *SheetsExportParams) (*sdkmcp.CallToolResult, any, error) {
 	_ = ctx
 	_ = req
+	_ = t.client
 
 	result := SheetsExportResult{}
 	if params != nil {

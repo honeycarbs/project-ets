@@ -11,6 +11,7 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/honeycarbs/project-ets/internal/config"
+	"github.com/honeycarbs/project-ets/internal/domain/job"
 	"github.com/honeycarbs/project-ets/internal/mcp/tools"
 	"github.com/honeycarbs/project-ets/pkg/logging"
 )
@@ -24,8 +25,47 @@ type Server struct {
 	started atomic.Bool
 }
 
+// Option allows callers to customize server dependencies
+type Option func(*toolDeps)
+
+// WithJobService injects the job service used by job_search
+func WithJobService(service job.Service) Option {
+	return func(deps *toolDeps) {
+		if service != nil {
+			deps.jobService = service
+		}
+	}
+}
+
+// WithKeywordRepository injects the keyword repository used by persist_keywords
+func WithKeywordRepository(repo tools.KeywordRepository) Option {
+	return func(deps *toolDeps) {
+		if repo != nil {
+			deps.keywordRepo = repo
+		}
+	}
+}
+
+// WithAnalysisService injects the analysis service used by job_analysis
+func WithAnalysisService(service tools.AnalysisService) Option {
+	return func(deps *toolDeps) {
+		if service != nil {
+			deps.analysisSvc = service
+		}
+	}
+}
+
+// WithSheetsClient injects the sheets client used by sheets_export
+func WithSheetsClient(client tools.SheetsClient) Option {
+	return func(deps *toolDeps) {
+		if client != nil {
+			deps.sheetsClient = client
+		}
+	}
+}
+
 // NewServer builds the MCP HTTP server
-func NewServer(log *logging.Logger, cfg config.Config) *Server {
+func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) *Server {
 	impl := &sdkmcp.Implementation{
 		Name:    "project-ets",
 		Version: "0.1.0",
@@ -33,14 +73,21 @@ func NewServer(log *logging.Logger, cfg config.Config) *Server {
 
 	mcpServer := sdkmcp.NewServer(impl, nil)
 
+	deps := defaultToolDeps()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&deps)
+		}
+	}
+
 	// Register stub tools
 	tools.Register(
 		mcpServer,
-		tools.WithJobSearch(),
-		tools.WithPersistKeywords(),
-		tools.WithJobAnalysis(),
+		tools.WithJobSearch(deps.jobService),
+		tools.WithPersistKeywords(deps.keywordRepo),
+		tools.WithJobAnalysis(deps.analysisSvc),
 		tools.WithGraphTool(),
-		tools.WithSheetsExport(),
+		tools.WithSheetsExport(deps.sheetsClient),
 	)
 
 	handler := sdkmcp.NewStreamableHTTPHandler(func(req *http.Request) *sdkmcp.Server {

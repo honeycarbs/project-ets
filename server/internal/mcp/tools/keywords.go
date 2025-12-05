@@ -21,6 +21,11 @@ type KeywordRecord struct {
 	Source   string         `json:"source,omitempty" jsonschema:"Optional agent/run label"`
 }
 
+// KeywordRepository persists keyword records downstream
+type KeywordRepository interface {
+	PersistKeywords(ctx context.Context, records []KeywordRecord) error
+}
+
 // PersistKeywordsParams defines the arguments for the persist_keywords tool
 type PersistKeywordsParams struct {
 	Records []KeywordRecord `json:"records" jsonschema:"Keyword payloads to persist"`
@@ -33,19 +38,25 @@ type PersistKeywordsResult struct {
 	Message      string   `json:"message,omitempty" jsonschema:"Optional status message"`
 }
 
+type persistKeywordsTool struct {
+	repo KeywordRepository
+}
+
 // WithPersistKeywords registers the persist_keywords tool
-func WithPersistKeywords() Option {
+func WithPersistKeywords(repo KeywordRepository) Option {
 	return func(reg *registry) {
+		handler := persistKeywordsTool{repo: repo}
 		sdkmcp.AddTool(reg.server, &sdkmcp.Tool{
 			Name:        "persist_keywords",
 			Description: "Store agent-extracted keywords against existing job nodes",
-		}, persistKeywords)
+		}, handler.handle)
 	}
 }
 
-func persistKeywords(ctx context.Context, req *sdkmcp.CallToolRequest, params *PersistKeywordsParams) (*sdkmcp.CallToolResult, any, error) {
+func (t persistKeywordsTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *PersistKeywordsParams) (*sdkmcp.CallToolResult, any, error) {
 	_ = ctx
 	_ = req
+	_ = t.repo
 
 	result := PersistKeywordsResult{}
 	if params != nil {

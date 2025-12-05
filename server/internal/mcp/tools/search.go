@@ -6,6 +6,8 @@ import (
 	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/honeycarbs/project-ets/internal/domain/job"
 )
 
 // JobSearchParams defines the arguments for the job_search tool
@@ -38,19 +40,25 @@ type JobSearchResult struct {
 	SourceCount int            `json:"source_count" jsonschema:"How many providers returned results"`
 }
 
-// WithJobSearch registers the job_search tool
-func WithJobSearch() Option {
+type jobSearchTool struct {
+	service job.Service
+}
+
+// WithJobSearch registers the job_search tool with the provided service
+func WithJobSearch(service job.Service) Option {
 	return func(reg *registry) {
+		handler := jobSearchTool{service: service}
 		sdkmcp.AddTool(reg.server, &sdkmcp.Tool{
 			Name:        "job_search",
 			Description: "Search external job boards/APIs, normalize, and store job postings",
-		}, jobSearch)
+		}, handler.handle)
 	}
 }
 
-func jobSearch(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobSearchParams) (*sdkmcp.CallToolResult, any, error) {
+func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobSearchParams) (*sdkmcp.CallToolResult, any, error) {
 	_ = ctx
 	_ = req
+	_ = t.service
 
 	query := ""
 	location := ""

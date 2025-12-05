@@ -8,6 +8,11 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// AnalysisService encapsulates graph/keyword reasoning logic
+type AnalysisService interface {
+	Analyze(ctx context.Context, params JobAnalysisParams) (JobAnalysisResult, error)
+}
+
 // JobAnalysisParams defines the arguments for the job_analysis tool
 type JobAnalysisParams struct {
 	JobIDs           []string                 `json:"job_ids,omitempty" jsonschema:"Existing job identifiers stored in Neo4j"`
@@ -42,19 +47,25 @@ type JobAnalysisResult struct {
 	Notes       string               `json:"notes,omitempty" jsonschema:"Global summary or caveats"`
 }
 
+type jobAnalysisTool struct {
+	service AnalysisService
+}
+
 // WithJobAnalysis registers the job_analysis tool
-func WithJobAnalysis() Option {
+func WithJobAnalysis(service AnalysisService) Option {
 	return func(reg *registry) {
+		handler := jobAnalysisTool{service: service}
 		sdkmcp.AddTool(reg.server, &sdkmcp.Tool{
 			Name:        "job_analysis",
 			Description: "Summarize stored job graphs against a candidate profile using Graph RAG",
-		}, jobAnalysis)
+		}, handler.handle)
 	}
 }
 
-func jobAnalysis(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobAnalysisParams) (*sdkmcp.CallToolResult, any, error) {
+func (t jobAnalysisTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobAnalysisParams) (*sdkmcp.CallToolResult, any, error) {
 	_ = ctx
 	_ = req
+	_ = t.service
 
 	var jobIDs []string
 	focus := ""
