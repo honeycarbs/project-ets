@@ -3,6 +3,7 @@ module github.com/honeycarbs/project-ets
 go 1.25.3
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/modelcontextprotocol/go-sdk v1.1.0
 	go.uber.org/zap v1.27.1
 )

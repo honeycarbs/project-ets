@@ -16,10 +16,10 @@ import (
 
 // Server wraps an MCP SDK server with an HTTP listener
 type Server struct {
-	log    *logging.Logger
+	logger *logging.Logger
 	config config.Config
 
-	httpSrv *http.Server
+	srv     *http.Server
 	started atomic.Bool
 }
 
@@ -53,9 +53,9 @@ func NewServer(log *logging.Logger, cfg config.Config) *Server {
 	}
 
 	return &Server{
-		log:     log,
-		config:  cfg,
-		httpSrv: httpSrv,
+		logger: log,
+		config: cfg,
+		srv:    httpSrv,
 	}
 }
 
@@ -65,9 +65,9 @@ func (s *Server) Run() error {
 		return nil
 	}
 
-	s.log.Info("MCP HTTP server listening", "addr", s.httpSrv.Addr)
+	s.logger.Info("MCP HTTP server listening", "addr", s.srv.Addr)
 
-	if err := s.httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 
@@ -75,12 +75,12 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.log.Info("shutdown requested for MCP HTTP server")
-	if err := s.httpSrv.Shutdown(ctx); err != nil {
-		s.log.Warn("MCP HTTP server shutdown with error", "err", err)
+	s.logger.Info("shutdown requested for MCP HTTP server")
+	if err := s.srv.Shutdown(ctx); err != nil {
+		s.logger.Warn("MCP HTTP server shutdown with error", "err", err)
 		return err
 	}
 
-	s.log.Info("MCP HTTP server shutdown complete")
+	s.logger.Info("MCP HTTP server shutdown complete")
 	return nil
 }
