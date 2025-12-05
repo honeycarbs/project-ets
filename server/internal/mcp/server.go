@@ -37,6 +37,7 @@ func NewServer(log *logging.Logger, cfg config.Config) *Server {
 	tools.Register(
 		mcpServer,
 		tools.WithJobSearch(),
+		tools.WithPersistKeywords(),
 		tools.WithJobAnalysis(),
 		tools.WithGraphTool(),
 		tools.WithSheetsExport(),
