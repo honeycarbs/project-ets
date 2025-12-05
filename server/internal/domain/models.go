@@ -6,22 +6,22 @@ import (
 	"github.com/google/uuid"
 )
 
-// JobID is the internal identifier for a Job (UUID)
+// JobID uniquely identifies a job
 type JobID = uuid.UUID
 
-// CompanyRef is a reference to a company
+// CompanyRef references a company
 type CompanyRef struct {
 	ID   string
 	Name string
 }
 
-// SkillRef is a reference to a skill
+// SkillRef references a skill
 type SkillRef struct {
 	ID   string
 	Name string
 }
 
-// Job is the core domain entity representing a normalized job posting
+// Job is the normalized job posting entity
 type Job struct {
 	ID          JobID
 	Title       string
@@ -38,14 +38,14 @@ type Job struct {
 	FetchedAt   time.Time
 }
 
-// JobSearchFilters represent the filters the user can apply in job_search
+// JobSearchFilters describe allowed job query filters
 type JobSearchFilters struct {
 	Location string
 	Remote   *bool
 	Skills   []string
 }
 
-// JobSummary is a view of a job for responses (MCP, Sheets, etc.)
+// JobSummary is the response-friendly job view
 type JobSummary struct {
 	ID       JobID   `json:"id"`
 	Title    string  `json:"title"`
@@ -57,7 +57,7 @@ type JobSummary struct {
 	Score    float64 `json:"score"`
 }
 
-// JobSearchResult is the domain result for a job search
+// JobSearchResult wraps job search output
 type JobSearchResult struct {
 	Jobs        []JobSummary
 	FetchedAt   time.Time

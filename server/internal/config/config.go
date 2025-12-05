@@ -5,12 +5,12 @@ import "os"
 // Config contains runtime settings for the MCP server
 type Config struct {
 	LogLevel string
-	Host     string // default "0.0.0.0"
-	Port     string // default os.Getenv("PORT") or "8080"
-	// TODO: Neo4jURI, OpenAIKey, SheetsCredsPath, etc.
+	Host     string // default 0.0.0.0
+	Port     string // default PORT env or 8080
+	// TODO: add Neo4jURI, OpenAIKey, SheetsCredsPath
 }
 
-// Load populates configuration from environment variables, seeding defaults first
+// Load populates config from environment variables
 func Load() (Config, error) {
 	cfg := Config{
 		LogLevel: "info",

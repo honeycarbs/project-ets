@@ -13,14 +13,12 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Create the client (the LLM side)
 	client := mcp.NewClient(&mcp.Implementation{
 		Name:    "project-ets-test-client",
 		Version: "0.1.0",
 	}, nil)
 
-	// Connect over streamable HTTP to your server on localhost:8080
-	// Endpoint is just base URL; the SDK knows to use the right MCP paths.
+	// Connect over streamable HTTP to localhost:8080
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint: "http://localhost:8080/mcp/stream",
 	}, nil)

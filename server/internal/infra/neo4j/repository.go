@@ -4,20 +4,19 @@ import (
 	"context"
 
 	"github.com/honeycarbs/project-ets/internal/domain"
-	//"github.com/honeycarbs/project-ets/internal/domain/job"
 )
 
-// Repository is a Neo4j-backed implementation of job.Repository
+// Repository implements job.Repository with Neo4j
 type Repository struct {
-	// TODO: add Neo4j driver fields here, e.g. driver neo4j.DriverWithContext
+	// TODO: add Neo4j driver fields such as neo4j.DriverWithContext
 }
 
-// NewRepository constructs a new Repository
+// NewRepository creates a Repository
 func NewRepository() *Repository {
 	return &Repository{}
 }
 
-// UpsertJobs performs Neo4j MERGE/SET logic when wiring the database (TODO)
+// UpsertJobs will merge and set job data in Neo4j
 func (r *Repository) UpsertJobs(ctx context.Context, jobs []domain.Job) error {
 	_ = ctx
 	_ = jobs

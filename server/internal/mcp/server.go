@@ -11,10 +11,11 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/honeycarbs/project-ets/internal/config"
+	"github.com/honeycarbs/project-ets/internal/mcp/tools"
 	"github.com/honeycarbs/project-ets/pkg/logging"
 )
 
-// Server wraps an MCP SDK server with an HTTP listener
+// Server wraps the MCP SDK with an HTTP listener
 type Server struct {
 	logger *logging.Logger
 	config config.Config
@@ -23,7 +24,7 @@ type Server struct {
 	started atomic.Bool
 }
 
-// NewServer constructs a new MCP HTTP server
+// NewServer builds the MCP HTTP server
 func NewServer(log *logging.Logger, cfg config.Config) *Server {
 	impl := &sdkmcp.Implementation{
 		Name:    "project-ets",
@@ -32,8 +33,14 @@ func NewServer(log *logging.Logger, cfg config.Config) *Server {
 
 	mcpServer := sdkmcp.NewServer(impl, nil)
 
-	// Register baseline tools as stubs for now
-	registerTools(mcpServer)
+	// Register stub tools
+	tools.Register(
+		mcpServer,
+		tools.WithJobSearch(),
+		tools.WithJobAnalysis(),
+		tools.WithGraphTool(),
+		tools.WithSheetsExport(),
+	)
 
 	handler := sdkmcp.NewStreamableHTTPHandler(func(req *http.Request) *sdkmcp.Server {
 		return mcpServer
@@ -59,7 +66,7 @@ func NewServer(log *logging.Logger, cfg config.Config) *Server {
 	}
 }
 
-// Run starts the HTTP server and blocks until shutdown
+// Run starts the HTTP server until shutdown
 func (s *Server) Run() error {
 	if !s.started.CompareAndSwap(false, true) {
 		return nil

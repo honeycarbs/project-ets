@@ -11,6 +11,6 @@ type Provider interface {
 	// e.g. "linkedin" or "Indeed"
 	Name() string
 
-	// Search returns normalized jobs for the given query and filters
+	// Search returns normalized jobs for a query
 	Search(ctx context.Context, query string, filters domain.JobSearchFilters) ([]domain.Job, error)
 }

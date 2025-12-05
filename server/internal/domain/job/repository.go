@@ -11,6 +11,6 @@ type Repository interface {
 	// UpsertJobs creates or updates jobs based on Source + ExternalID
 	UpsertJobs(ctx context.Context, jobs []domain.Job) error
 
-	// FindByIDs loads full Job records for the given IDs
+	// FindByIDs loads jobs by ID
 	FindByIDs(ctx context.Context, ids []domain.JobID) ([]domain.Job, error)
 }

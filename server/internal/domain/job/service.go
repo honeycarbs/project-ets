@@ -13,7 +13,7 @@ type Service interface {
 	Search(ctx context.Context, query string, filters domain.JobSearchFilters) (domain.JobSearchResult, error)
 }
 
-// Option configures the Service
+// Option configures Service
 type Option func(*config)
 
 type config struct {
@@ -22,28 +22,28 @@ type config struct {
 	clock     func() time.Time
 }
 
-// WithProviders sets the list of job providers
+// WithProviders sets job providers
 func WithProviders(providers ...Provider) Option {
 	return func(c *config) {
 		c.providers = providers
 	}
 }
 
-// WithRepository sets the job repository
+// WithRepository sets the repository
 func WithRepository(repo Repository) Option {
 	return func(c *config) {
 		c.repo = repo
 	}
 }
 
-// WithClock overrides the clock used by the service
+// WithClock sets a custom clock
 func WithClock(clock func() time.Time) Option {
 	return func(c *config) {
 		c.clock = clock
 	}
 }
 
-// NewService constructs a Service from functional options
+// NewService builds Service from options
 func NewService(opts ...Option) (Service, error) {
 	cfg := &config{
 		clock: time.Now,
@@ -52,7 +52,6 @@ func NewService(opts ...Option) (Service, error) {
 		opt(cfg)
 	}
 
-	// Validate required dependencies
 	if cfg.repo == nil {
 		return nil, fmt.Errorf("job.Service: repository is required")
 	}
@@ -73,7 +72,7 @@ type service struct {
 	clock     func() time.Time
 }
 
-// Search implements Service
+// Search queries providers and stores results
 func (s *service) Search(
 	ctx context.Context,
 	query string,
