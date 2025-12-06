@@ -45,8 +45,8 @@ func main() {
 	params := &mcp.CallToolParams{
 		Name: "job_search",
 		Arguments: map[string]any{
-			"query":    "ai engineer",
-			"location": "remote",
+			"query":    "software engineer",
+			"location": "Oregon",
 		},
 	}
 	res, err := session.CallTool(ctx, params)

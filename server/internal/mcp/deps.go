@@ -2,10 +2,15 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/honeycarbs/project-ets/internal/config"
 	"github.com/honeycarbs/project-ets/internal/domain"
 	"github.com/honeycarbs/project-ets/internal/domain/job"
+	adzunaProvider "github.com/honeycarbs/project-ets/internal/domain/job/providers/adzuna"
 	"github.com/honeycarbs/project-ets/internal/mcp/tools"
+	adzuna "github.com/honeycarbs/project-ets/pkg/adzuna"
+	"github.com/honeycarbs/project-ets/pkg/logging"
 )
 
 type toolDeps struct {
@@ -15,22 +20,62 @@ type toolDeps struct {
 	sheetsClient tools.SheetsClient
 }
 
-func defaultToolDeps() toolDeps {
-	return toolDeps{
-		jobService:   stubJobService{},
+func defaultToolDeps(cfg config.Config, logger *logging.Logger) toolDeps {
+	deps := toolDeps{
 		keywordRepo:  stubKeywordRepository{},
 		analysisSvc:  stubAnalysisService{},
 		sheetsClient: stubSheetsClient{},
 	}
+
+	if svc, err := buildAdzunaJobService(cfg); err == nil {
+		deps.jobService = svc
+		logger.Info("Adzuna provider initialized", "country", cfg.Adzuna.Country)
+	} else {
+		logger.Warn("failed to initialize Adzuna provider", "err", err)
+	}
+
+	return deps
 }
 
-type stubJobService struct{}
+func buildAdzunaJobService(cfg config.Config) (job.Service, error) {
+	if cfg.Adzuna.AppID == "" || cfg.Adzuna.AppKey == "" {
+		return nil, fmt.Errorf("adzuna credentials missing")
+	}
 
-func (stubJobService) Search(ctx context.Context, query string, filters domain.JobSearchFilters) (domain.JobSearchResult, error) {
+	client, err := adzuna.NewClient(adzuna.Config{
+		AppID:   cfg.Adzuna.AppID,
+		AppKey:  cfg.Adzuna.AppKey,
+		Country: cfg.Adzuna.Country,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	provider, err := adzunaProvider.NewProvider(client)
+	if err != nil {
+		return nil, err
+	}
+
+	repo := stubJobRepository{}
+
+	return job.NewService(
+		job.WithProviders(provider),
+		job.WithRepository(repo),
+	)
+}
+
+type stubJobRepository struct{}
+
+func (stubJobRepository) UpsertJobs(ctx context.Context, jobs []domain.Job) error {
 	_ = ctx
-	_ = query
-	_ = filters
-	return domain.JobSearchResult{}, nil
+	_ = jobs
+	return nil
+}
+
+func (stubJobRepository) FindByIDs(ctx context.Context, ids []domain.JobID) ([]domain.Job, error) {
+	_ = ctx
+	_ = ids
+	return nil, nil
 }
 
 type stubKeywordRepository struct{}

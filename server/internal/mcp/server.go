@@ -73,7 +73,7 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) *Server {
 
 	mcpServer := sdkmcp.NewServer(impl, nil)
 
-	deps := defaultToolDeps()
+	deps := defaultToolDeps(cfg, log)
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&deps)
@@ -83,7 +83,7 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) *Server {
 	// Register stub tools
 	tools.Register(
 		mcpServer,
-		tools.WithJobSearch(deps.jobService),
+		tools.WithJobSearch(deps.jobService, log),
 		tools.WithPersistKeywords(deps.keywordRepo),
 		tools.WithJobAnalysis(deps.analysisSvc),
 		tools.WithGraphTool(),

@@ -7,7 +7,9 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/honeycarbs/project-ets/internal/domain"
 	"github.com/honeycarbs/project-ets/internal/domain/job"
+	"github.com/honeycarbs/project-ets/pkg/logging"
 )
 
 // JobSearchParams defines the arguments for the job_search tool
@@ -42,12 +44,16 @@ type JobSearchResult struct {
 
 type jobSearchTool struct {
 	service job.Service
+	logger  *logging.Logger
 }
 
 // WithJobSearch registers the job_search tool with the provided service
-func WithJobSearch(service job.Service) Option {
+func WithJobSearch(service job.Service, logger *logging.Logger) Option {
 	return func(reg *registry) {
-		handler := jobSearchTool{service: service}
+		handler := jobSearchTool{
+			service: service,
+			logger:  logger,
+		}
 		sdkmcp.AddTool(reg.server, &sdkmcp.Tool{
 			Name:        "job_search",
 			Description: "Search external job boards/APIs, normalize, and store job postings",
@@ -56,10 +62,6 @@ func WithJobSearch(service job.Service) Option {
 }
 
 func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobSearchParams) (*sdkmcp.CallToolResult, any, error) {
-	_ = ctx
-	_ = req
-	_ = t.service
-
 	query := ""
 	location := ""
 	var skills []string
@@ -69,15 +71,75 @@ func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, 
 		skills = params.Skills
 	}
 
-	now := time.Now().UTC()
-	result := JobSearchResult{
-		Jobs: []JobSearchJob{
-			{},
-		},
-		FetchedAt:   now,
-		SourceCount: 0,
+	if t.service == nil {
+		msg := "job_search unavailable: no job service is configured"
+		if t.logger != nil {
+			t.logger.Warn(msg)
+		}
+		return textResult(msg), JobSearchResult{}, fmt.Errorf(msg)
 	}
 
-	msg := fmt.Sprintf("[job_search] Stub implementation: returning %d empty job for query=%q location=%q skills=%v", len(result.Jobs), query, location, skills)
+	if t.logger != nil {
+		t.logger.Info("job_search request",
+			"query", query,
+			"location", location,
+			"skills", skills,
+		)
+	}
+
+	if query == "" {
+		err := fmt.Errorf("job_search: query is required")
+		if t.logger != nil {
+			t.logger.Warn("job_search missing query")
+		}
+		return textResult("job_search requires a non-empty query"), JobSearchResult{}, err
+	}
+
+	filters := domain.JobSearchFilters{
+		Location: location,
+		Remote:   nil,
+		Skills:   skills,
+	}
+	if params != nil {
+		filters.Remote = params.Remote
+	}
+
+	serviceResult, err := t.service.Search(ctx, query, filters)
+	if err != nil {
+		if t.logger != nil {
+			t.logger.Error("job_search service failure", "err", err)
+		}
+		return textResult(fmt.Sprintf("job_search failed: %v", err)), JobSearchResult{}, err
+	}
+
+	jobs := make([]JobSearchJob, 0, len(serviceResult.Jobs))
+	for _, summary := range serviceResult.Jobs {
+		jobs = append(jobs, JobSearchJob{
+			ID:        summary.ID.String(),
+			Title:     summary.Title,
+			Company:   summary.Company,
+			Location:  summary.Location,
+			Remote:    summary.Remote,
+			URL:       summary.URL,
+			Source:    summary.Source,
+			Score:     summary.Score,
+			FetchedAt: serviceResult.FetchedAt,
+		})
+	}
+
+	result := JobSearchResult{
+		Jobs:        jobs,
+		FetchedAt:   serviceResult.FetchedAt,
+		SourceCount: serviceResult.SourceCount,
+	}
+
+	if t.logger != nil {
+		t.logger.Info("job_search completed",
+			"jobs", len(jobs),
+			"sources", serviceResult.SourceCount,
+		)
+	}
+
+	msg := fmt.Sprintf("[job_search] fetched %d job(s) from %d source(s)", len(jobs), serviceResult.SourceCount)
 	return textResult(msg), result, nil
 }
