@@ -7,6 +7,11 @@ type Config struct {
 	LogLevel string
 	Host     string // default 0.0.0.0
 	Port     string // default PORT env or 8080
+	Adzuna   struct {
+		AppID   string
+		AppKey  string
+		Country string
+	} // Adzuna API credentials
 	// TODO: add Neo4jURI, OpenAIKey, SheetsCredsPath
 }
 
@@ -28,6 +33,14 @@ func Load() (Config, error) {
 
 	if v := os.Getenv("PORT"); v != "" {
 		cfg.Port = v
+	}
+
+	cfg.Adzuna.AppID = os.Getenv("ADZUNA_APP_ID")
+	cfg.Adzuna.AppKey = os.Getenv("ADZUNA_APP_KEY")
+	if v := os.Getenv("ADZUNA_COUNTRY"); v != "" {
+		cfg.Adzuna.Country = v
+	} else {
+		cfg.Adzuna.Country = "us"
 	}
 
 	return cfg, nil
