@@ -10,6 +10,7 @@ import (
 	"github.com/honeycarbs/project-ets/internal/config"
 	"github.com/honeycarbs/project-ets/internal/domain/job"
 	adzuna2 "github.com/honeycarbs/project-ets/internal/domain/job/providers/adzuna"
+	"github.com/honeycarbs/project-ets/internal/mcp/tools"
 	neo4j2 "github.com/honeycarbs/project-ets/internal/storage/neo4j"
 	"github.com/honeycarbs/project-ets/pkg/adzuna"
 	"github.com/honeycarbs/project-ets/pkg/neo4j"
@@ -39,10 +40,10 @@ func InitializeResources(cfg config.Config) (*Resources, error) {
 	if err != nil {
 		return nil, err
 	}
-	mcpStubKeywordRepository := provideStubKeywordRepository()
+	keywordRepository := neo4j2.NewKeywordRepository(client)
 	mcpStubAnalysisService := provideStubAnalysisService()
 	mcpStubSheetsClient := provideStubSheetsClient()
-	resources := newResources(service, mcpStubKeywordRepository, mcpStubAnalysisService, mcpStubSheetsClient, client)
+	resources := newResources(service, keywordRepository, mcpStubAnalysisService, mcpStubSheetsClient, client)
 	return resources, nil
 }
 
@@ -76,11 +77,6 @@ func provideJobProviders(adzunaProvider *adzuna2.Provider) []job.Provider {
 	return []job.Provider{adzunaProvider}
 }
 
-// provideStubKeywordRepository provides stub keyword repository
-func provideStubKeywordRepository() stubKeywordRepository {
-	return stubKeywordRepository{}
-}
-
 // provideStubAnalysisService provides stub analysis service
 func provideStubAnalysisService() stubAnalysisService {
 	return stubAnalysisService{}
@@ -94,7 +90,7 @@ func provideStubSheetsClient() stubSheetsClient {
 // newResources creates Resources struct
 func newResources(
 	jobService job.Service,
-	keywordRepo stubKeywordRepository,
+	keywordRepo tools.KeywordRepository,
 	analysisSvc stubAnalysisService,
 	sheetsClient stubSheetsClient,
 	neo4jClient *neo4j.Client,

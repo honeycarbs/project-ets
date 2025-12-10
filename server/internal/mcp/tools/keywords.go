@@ -54,25 +54,27 @@ func WithPersistKeywords(repo KeywordRepository) Option {
 }
 
 func (t persistKeywordsTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *PersistKeywordsParams) (*sdkmcp.CallToolResult, any, error) {
-	_ = ctx
 	_ = req
-	_ = t.repo
 
 	result := PersistKeywordsResult{}
-	if params != nil {
-		result.SavedRecords = len(params.Records)
-		result.JobIDs = make([]string, 0, len(params.Records))
-		for _, record := range params.Records {
-			if record.JobID != "" {
-				result.JobIDs = append(result.JobIDs, record.JobID)
-			}
+	if params == nil || len(params.Records) == 0 {
+		result.Message = "no records provided"
+		return textResult(result.Message), result, nil
+	}
+
+	if err := t.repo.PersistKeywords(ctx, params.Records); err != nil {
+		return nil, nil, fmt.Errorf("failed to persist keywords: %w", err)
+	}
+
+	result.SavedRecords = len(params.Records)
+	result.JobIDs = make([]string, 0, len(params.Records))
+	for _, record := range params.Records {
+		if record.JobID != "" {
+			result.JobIDs = append(result.JobIDs, record.JobID)
 		}
 	}
 
-	if result.Message == "" {
-		result.Message = "keywords accepted (stub)"
-	}
-
-	msg := fmt.Sprintf("[persist_keywords] Stub implementation: received %d record(s)", result.SavedRecords)
+	result.Message = fmt.Sprintf("successfully persisted keywords for %d job(s)", result.SavedRecords)
+	msg := fmt.Sprintf("[persist_keywords] Persisted %d record(s) for %d job(s)", result.SavedRecords, len(result.JobIDs))
 	return textResult(msg), result, nil
 }
