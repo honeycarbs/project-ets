@@ -21,8 +21,9 @@ type Server struct {
 	logger *logging.Logger
 	config config.Config
 
-	srv     *http.Server
-	started atomic.Bool
+	srv      *http.Server
+	started  atomic.Bool
+	toolDeps toolDeps
 }
 
 // Option allows callers to customize server dependencies
@@ -108,9 +109,10 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) *Server {
 	}
 
 	return &Server{
-		logger: log,
-		config: cfg,
-		srv:    httpSrv,
+		logger:   log,
+		config:   cfg,
+		srv:      httpSrv,
+		toolDeps: deps,
 	}
 }
 
@@ -131,6 +133,12 @@ func (s *Server) Run() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("shutdown requested for MCP HTTP server")
+	
+	// Cleanup resources (e.g., Neo4j driver)
+	if err := s.toolDeps.cleanup(ctx); err != nil {
+		s.logger.Warn("error during resource cleanup", "err", err)
+	}
+	
 	if err := s.srv.Shutdown(ctx); err != nil {
 		s.logger.Warn("MCP HTTP server shutdown with error", "err", err)
 		return err

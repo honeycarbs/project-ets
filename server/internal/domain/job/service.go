@@ -66,6 +66,22 @@ func NewService(opts ...Option) (Service, error) {
 	}, nil
 }
 
+// NewServiceWithDeps creates a Service with direct dependencies (Wire-compatible)
+func NewServiceWithDeps(repo Repository, providers []Provider) (Service, error) {
+	if repo == nil {
+		return nil, fmt.Errorf("job.Service: repository is required")
+	}
+	if len(providers) == 0 {
+		return nil, fmt.Errorf("job.Service: at least one provider is required")
+	}
+
+	return &service{
+		providers: providers,
+		repo:      repo,
+		clock:     time.Now,
+	}, nil
+}
+
 type service struct {
 	providers []Provider
 	repo      Repository

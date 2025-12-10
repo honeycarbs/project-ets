@@ -2,80 +2,50 @@ package mcp
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/honeycarbs/project-ets/internal/config"
-	"github.com/honeycarbs/project-ets/internal/domain"
 	"github.com/honeycarbs/project-ets/internal/domain/job"
-	adzunaProvider "github.com/honeycarbs/project-ets/internal/domain/job/providers/adzuna"
 	"github.com/honeycarbs/project-ets/internal/mcp/tools"
-	adzuna "github.com/honeycarbs/project-ets/pkg/adzuna"
 	"github.com/honeycarbs/project-ets/pkg/logging"
+	n4j "github.com/honeycarbs/project-ets/pkg/neo4j"
 )
 
 type toolDeps struct {
-	jobService   job.Service
-	keywordRepo  tools.KeywordRepository
-	analysisSvc  tools.AnalysisService
+	jobService  job.Service
+	analysisSvc tools.AnalysisService
+	
+	keywordRepo tools.KeywordRepository
+
 	sheetsClient tools.SheetsClient
+	neo4jClient  *n4j.Client // stored for cleanup
 }
 
 func defaultToolDeps(cfg config.Config, logger *logging.Logger) toolDeps {
-	deps := toolDeps{
-		keywordRepo:  stubKeywordRepository{},
-		analysisSvc:  stubAnalysisService{},
-		sheetsClient: stubSheetsClient{},
+	deps, err := InitializeToolDeps(cfg)
+	if err != nil {
+		logger.Warn("failed to initialize tool dependencies", "err", err)
+		// Return minimal deps with stubs
+		return toolDeps{
+			keywordRepo:  stubKeywordRepository{},
+			analysisSvc:  stubAnalysisService{},
+			sheetsClient: stubSheetsClient{},
+		}
 	}
 
-	if svc, err := buildAdzunaJobService(cfg); err == nil {
-		deps.jobService = svc
-		logger.Info("Adzuna provider initialized", "country", cfg.Adzuna.Country)
-	} else {
-		logger.Warn("failed to initialize Adzuna provider", "err", err)
+	logger.Info("Adzuna provider initialized", "country", cfg.Adzuna.Country)
+	if deps.neo4jClient != nil {
+		logger.Info("Neo4j client initialized", "uri", cfg.Neo4j.URI)
 	}
 
-	return deps
+	return *deps
 }
 
-func buildAdzunaJobService(cfg config.Config) (job.Service, error) {
-	if cfg.Adzuna.AppID == "" || cfg.Adzuna.AppKey == "" {
-		return nil, fmt.Errorf("adzuna credentials missing")
+// cleanup closes resources that need explicit cleanup
+func (d *toolDeps) cleanup(ctx context.Context) error {
+	if d.neo4jClient != nil {
+		return d.neo4jClient.Close(ctx)
 	}
-
-	client, err := adzuna.NewClient(adzuna.Config{
-		AppID:   cfg.Adzuna.AppID,
-		AppKey:  cfg.Adzuna.AppKey,
-		Country: cfg.Adzuna.Country,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	provider, err := adzunaProvider.NewProvider(client)
-	if err != nil {
-		return nil, err
-	}
-
-	repo := stubJobRepository{}
-
-	return job.NewService(
-		job.WithProviders(provider),
-		job.WithRepository(repo),
-	)
-}
-
-type stubJobRepository struct{}
-
-func (stubJobRepository) UpsertJobs(ctx context.Context, jobs []domain.Job) error {
-	_ = ctx
-	_ = jobs
 	return nil
-}
-
-func (stubJobRepository) FindByIDs(ctx context.Context, ids []domain.JobID) ([]domain.Job, error) {
-	_ = ctx
-	_ = ids
-	return nil, nil
 }
 
 type stubKeywordRepository struct{}
