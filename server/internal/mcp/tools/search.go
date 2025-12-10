@@ -61,6 +61,18 @@ func WithJobSearch(service job.Service, logger *logging.Logger) Option {
 	}
 }
 
+func RegisterJobTools(server *sdkmcp.Server, jobSvc job.Service, logger *logging.Logger) error {
+	handler := jobSearchTool{
+		service: jobSvc,
+		logger:  logger,
+	}
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "job_search",
+		Description: "Search external job boards/APIs, normalize, and store job postings",
+	}, handler.handle)
+	return nil
+}
+
 func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobSearchParams) (*sdkmcp.CallToolResult, any, error) {
 	query := ""
 	location := ""

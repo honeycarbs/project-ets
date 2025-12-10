@@ -14,8 +14,8 @@ import (
 	n4j "github.com/honeycarbs/project-ets/pkg/neo4j"
 )
 
-// InitializeToolDeps creates toolDeps with all dependencies wired up
-func InitializeToolDeps(cfg config.Config) (*toolDeps, error) {
+// InitializeResources creates Resources with all resources wired up
+func InitializeResources(cfg config.Config) (*Resources, error) {
 	wire.Build(
 		// Infrastructure - Neo4j
 		provideNeo4jConfig,
@@ -36,14 +36,14 @@ func InitializeToolDeps(cfg config.Config) (*toolDeps, error) {
 		// Services
 		job.NewServiceWithDeps,
 
-		// Tool dependencies - stubs
+		// Tool resources - stubs
 		provideStubKeywordRepository,
 		provideStubAnalysisService,
 		provideStubSheetsClient,
-		newToolDeps,
+		newResources,
 	)
 
-	return &toolDeps{}, nil
+	return &Resources{}, nil
 }
 
 // provideNeo4jConfig extracts Neo4j config from main config
@@ -89,20 +89,20 @@ func provideStubSheetsClient() stubSheetsClient {
 	return stubSheetsClient{}
 }
 
-// newToolDeps creates toolDeps struct
-func newToolDeps(
+// newResources creates Resources struct
+func newResources(
 	jobService job.Service,
 	keywordRepo stubKeywordRepository,
 	analysisSvc stubAnalysisService,
 	sheetsClient stubSheetsClient,
 	neo4jClient *n4j.Client,
-) *toolDeps {
-	return &toolDeps{
-		jobService:   jobService,
-		keywordRepo:  keywordRepo,
-		analysisSvc:  analysisSvc,
-		sheetsClient: sheetsClient,
-		neo4jClient:  neo4jClient,
+) *Resources {
+	return &Resources{
+		JobService:   jobService,
+		KeywordRepo:  keywordRepo,
+		AnalysisSvc:  analysisSvc,
+		SheetsClient: sheetsClient,
+		Neo4jClient:  neo4jClient,
 	}
 }
 

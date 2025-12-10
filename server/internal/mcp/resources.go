@@ -4,48 +4,27 @@ import (
 	"context"
 
 	"github.com/honeycarbs/project-ets/internal/config"
-	"github.com/honeycarbs/project-ets/internal/domain/job"
 	"github.com/honeycarbs/project-ets/internal/mcp/tools"
 	"github.com/honeycarbs/project-ets/pkg/logging"
-	n4j "github.com/honeycarbs/project-ets/pkg/neo4j"
 )
 
-type toolDeps struct {
-	jobService  job.Service
-	analysisSvc tools.AnalysisService
-	
-	keywordRepo tools.KeywordRepository
-
-	sheetsClient tools.SheetsClient
-	neo4jClient  *n4j.Client // stored for cleanup
-}
-
-func defaultToolDeps(cfg config.Config, logger *logging.Logger) toolDeps {
-	deps, err := InitializeToolDeps(cfg)
+func initializeResources(cfg config.Config, logger *logging.Logger) (*Resources, error) {
+	res, err := InitializeResources(cfg)
 	if err != nil {
-		logger.Warn("failed to initialize tool dependencies", "err", err)
-		// Return minimal deps with stubs
-		return toolDeps{
-			keywordRepo:  stubKeywordRepository{},
-			analysisSvc:  stubAnalysisService{},
-			sheetsClient: stubSheetsClient{},
-		}
+		logger.Warn("failed to initialize resources", "err", err)
+		return &Resources{
+			KeywordRepo:  stubKeywordRepository{},
+			AnalysisSvc:  stubAnalysisService{},
+			SheetsClient: stubSheetsClient{},
+		}, err
 	}
 
 	logger.Info("Adzuna provider initialized", "country", cfg.Adzuna.Country)
-	if deps.neo4jClient != nil {
+	if res.Neo4jClient != nil {
 		logger.Info("Neo4j client initialized", "uri", cfg.Neo4j.URI)
 	}
 
-	return *deps
-}
-
-// cleanup closes resources that need explicit cleanup
-func (d *toolDeps) cleanup(ctx context.Context) error {
-	if d.neo4jClient != nil {
-		return d.neo4jClient.Close(ctx)
-	}
-	return nil
+	return res, nil
 }
 
 type stubKeywordRepository struct{}

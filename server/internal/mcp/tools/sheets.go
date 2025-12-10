@@ -65,6 +65,15 @@ func WithSheetsExport(client SheetsClient) Option {
 	}
 }
 
+func RegisterExportTools(server *sdkmcp.Server, client SheetsClient) error {
+	handler := sheetsExportTool{client: client}
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "sheets_export",
+		Description: "Export job selections to Google Sheets via the sheets_client integrations",
+	}, handler.handle)
+	return nil
+}
+
 func (t sheetsExportTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *SheetsExportParams) (*sdkmcp.CallToolResult, any, error) {
 	_ = ctx
 	_ = req

@@ -25,6 +25,14 @@ func WithGraphTool() Option {
 	}
 }
 
+func RegisterGraphTool(server *sdkmcp.Server) error {
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "graph_tool",
+		Description: "Developer tool for inspecting and debugging the Neo4j knowledge graph",
+	}, graphTool)
+	return nil
+}
+
 func graphTool(ctx context.Context, req *sdkmcp.CallToolRequest, params *GraphToolParams) (*sdkmcp.CallToolResult, any, error) {
 	_ = ctx
 	_ = req

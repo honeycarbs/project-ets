@@ -14,6 +14,7 @@ import (
 	"github.com/honeycarbs/project-ets/internal/domain/job"
 	"github.com/honeycarbs/project-ets/internal/mcp/tools"
 	"github.com/honeycarbs/project-ets/pkg/logging"
+	n4j "github.com/honeycarbs/project-ets/pkg/neo4j"
 )
 
 // Server wraps the MCP SDK with an HTTP listener
@@ -21,52 +22,52 @@ type Server struct {
 	logger *logging.Logger
 	config config.Config
 
-	srv      *http.Server
-	started  atomic.Bool
-	toolDeps toolDeps
+	srv         *http.Server
+	started     atomic.Bool
+	neo4jClient *n4j.Client
 }
 
-// Option allows callers to customize server dependencies
-type Option func(*toolDeps)
+// Option allows callers to customize server resources
+type Option func(*Resources)
 
 // WithJobService injects the job service used by job_search
 func WithJobService(service job.Service) Option {
-	return func(deps *toolDeps) {
+	return func(res *Resources) {
 		if service != nil {
-			deps.jobService = service
+			res.JobService = service
 		}
 	}
 }
 
 // WithKeywordRepository injects the keyword repository used by persist_keywords
 func WithKeywordRepository(repo tools.KeywordRepository) Option {
-	return func(deps *toolDeps) {
+	return func(res *Resources) {
 		if repo != nil {
-			deps.keywordRepo = repo
+			res.KeywordRepo = repo
 		}
 	}
 }
 
 // WithAnalysisService injects the analysis service used by job_analysis
 func WithAnalysisService(service tools.AnalysisService) Option {
-	return func(deps *toolDeps) {
+	return func(res *Resources) {
 		if service != nil {
-			deps.analysisSvc = service
+			res.AnalysisSvc = service
 		}
 	}
 }
 
 // WithSheetsClient injects the sheets client used by sheets_export
 func WithSheetsClient(client tools.SheetsClient) Option {
-	return func(deps *toolDeps) {
+	return func(res *Resources) {
 		if client != nil {
-			deps.sheetsClient = client
+			res.SheetsClient = client
 		}
 	}
 }
 
 // NewServer builds the MCP HTTP server
-func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) *Server {
+func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) (*Server, error) {
 	impl := &sdkmcp.Implementation{
 		Name:    "project-ets",
 		Version: "0.1.0",
@@ -74,22 +75,26 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) *Server {
 
 	mcpServer := sdkmcp.NewServer(impl, nil)
 
-	deps := defaultToolDeps(cfg, log)
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&deps)
+	res, err := initializeResources(cfg, log)
+	if err != nil {
+		log.Warn("failed to initialize resources", "err", err)
+		res = &Resources{
+			KeywordRepo:  stubKeywordRepository{},
+			AnalysisSvc:  stubAnalysisService{},
+			SheetsClient: stubSheetsClient{},
 		}
 	}
 
-	// Register stub tools
-	tools.Register(
-		mcpServer,
-		tools.WithJobSearch(deps.jobService, log),
-		tools.WithPersistKeywords(deps.keywordRepo),
-		tools.WithJobAnalysis(deps.analysisSvc),
-		tools.WithGraphTool(),
-		tools.WithSheetsExport(deps.sheetsClient),
-	)
+	for _, opt := range opts {
+		if opt != nil {
+			opt(res)
+		}
+	}
+
+	registry := NewToolRegistry(log)
+	if err := registry.RegisterAll(mcpServer, *res); err != nil {
+		return nil, err
+	}
 
 	handler := sdkmcp.NewStreamableHTTPHandler(func(req *http.Request) *sdkmcp.Server {
 		return mcpServer
@@ -109,11 +114,11 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) *Server {
 	}
 
 	return &Server{
-		logger:   log,
-		config:   cfg,
-		srv:      httpSrv,
-		toolDeps: deps,
-	}
+		logger:      log,
+		config:      cfg,
+		srv:         httpSrv,
+		neo4jClient: res.Neo4jClient,
+	}, nil
 }
 
 // Run starts the HTTP server until shutdown
@@ -133,12 +138,13 @@ func (s *Server) Run() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("shutdown requested for MCP HTTP server")
-	
-	// Cleanup resources (e.g., Neo4j driver)
-	if err := s.toolDeps.cleanup(ctx); err != nil {
-		s.logger.Warn("error during resource cleanup", "err", err)
+
+	if s.neo4jClient != nil {
+		if err := s.neo4jClient.Close(ctx); err != nil {
+			s.logger.Warn("error during Neo4j cleanup", "err", err)
+		}
 	}
-	
+
 	if err := s.srv.Shutdown(ctx); err != nil {
 		s.logger.Warn("MCP HTTP server shutdown with error", "err", err)
 		return err

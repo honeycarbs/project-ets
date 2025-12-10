@@ -17,8 +17,8 @@ import (
 
 // Injectors from wire.go:
 
-// InitializeToolDeps creates toolDeps with all dependencies wired up
-func InitializeToolDeps(cfg config.Config) (*toolDeps, error) {
+// InitializeResources creates Resources with all resources wired up
+func InitializeResources(cfg config.Config) (*Resources, error) {
 	neo4jConfig := provideNeo4jConfig(cfg)
 	client, err := neo4j.NewClient(neo4jConfig)
 	if err != nil {
@@ -42,8 +42,8 @@ func InitializeToolDeps(cfg config.Config) (*toolDeps, error) {
 	mcpStubKeywordRepository := provideStubKeywordRepository()
 	mcpStubAnalysisService := provideStubAnalysisService()
 	mcpStubSheetsClient := provideStubSheetsClient()
-	mcpToolDeps := newToolDeps(service, mcpStubKeywordRepository, mcpStubAnalysisService, mcpStubSheetsClient, client)
-	return mcpToolDeps, nil
+	resources := newResources(service, mcpStubKeywordRepository, mcpStubAnalysisService, mcpStubSheetsClient, client)
+	return resources, nil
 }
 
 // wire.go:
@@ -91,19 +91,19 @@ func provideStubSheetsClient() stubSheetsClient {
 	return stubSheetsClient{}
 }
 
-// newToolDeps creates toolDeps struct
-func newToolDeps(
+// newResources creates Resources struct
+func newResources(
 	jobService job.Service,
 	keywordRepo stubKeywordRepository,
 	analysisSvc stubAnalysisService,
 	sheetsClient stubSheetsClient,
 	neo4jClient *neo4j.Client,
-) *toolDeps {
-	return &toolDeps{
-		jobService:   jobService,
-		keywordRepo:  keywordRepo,
-		analysisSvc:  analysisSvc,
-		sheetsClient: sheetsClient,
-		neo4jClient:  neo4jClient,
+) *Resources {
+	return &Resources{
+		JobService:   jobService,
+		KeywordRepo:  keywordRepo,
+		AnalysisSvc:  analysisSvc,
+		SheetsClient: sheetsClient,
+		Neo4jClient:  neo4jClient,
 	}
 }

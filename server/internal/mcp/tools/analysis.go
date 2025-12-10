@@ -62,6 +62,22 @@ func WithJobAnalysis(service AnalysisService) Option {
 	}
 }
 
+func RegisterAnalysisTools(server *sdkmcp.Server, repo KeywordRepository, svc AnalysisService) error {
+	handler := jobAnalysisTool{service: svc}
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "job_analysis",
+		Description: "Summarize stored job graphs against a candidate profile using Graph RAG",
+	}, handler.handle)
+
+	persistHandler := persistKeywordsTool{repo: repo}
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "persist_keywords",
+		Description: "Store agent-extracted keywords against existing job nodes",
+	}, persistHandler.handle)
+
+	return nil
+}
+
 func (t jobAnalysisTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobAnalysisParams) (*sdkmcp.CallToolResult, any, error) {
 	_ = ctx
 	_ = req

@@ -22,7 +22,10 @@ func main() {
 	logger := logging.New(cfg.LogLevel)
 	defer func() { _ = logger.Sync() }()
 
-	srv := mcp.NewServer(logger, cfg)
+	srv, err := mcp.NewServer(logger, cfg)
+	if err != nil {
+		log.Fatalf("failed to create MCP server: %v", err)
+	}
 
 	go shutdown.Graceful(
 		[]os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP},
