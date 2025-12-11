@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/honeycarbs/project-ets/pkg/logging"
 )
 
 // KeywordEntry represents a single extracted keyword
@@ -38,7 +40,8 @@ type PersistKeywordsResult struct {
 }
 
 type persistKeywordsTool struct {
-	repo KeywordRepository
+	repo   KeywordRepository
+	logger *logging.Logger
 }
 
 // WithPersistKeywords registers the persist_keywords tool
@@ -52,14 +55,50 @@ func WithPersistKeywords(repo KeywordRepository) Option {
 	}
 }
 
-func (t persistKeywordsTool) handle(ctx context.Context, _ *sdkmcp.CallToolRequest, params *PersistKeywordsParams) (*sdkmcp.CallToolResult, any, error) {
+func (t persistKeywordsTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *PersistKeywordsParams) (*sdkmcp.CallToolResult, any, error) {
+	if t.logger != nil {
+		t.logger.Debug("persist_keywords called")
+	}
+
 	result := PersistKeywordsResult{}
 	if params == nil || len(params.Records) == 0 {
 		result.Message = "no records provided"
+		if t.logger != nil {
+			t.logger.Warn("persist_keywords: no records provided")
+		}
 		return textResult(result.Message), result, nil
 	}
 
+	if t.logger != nil {
+		t.logger.Info("persist_keywords request",
+			"records_count", len(params.Records),
+		)
+		// Log details about each record
+		for i, record := range params.Records {
+			t.logger.Debug("persist_keywords record",
+				"index", i,
+				"job_id", record.JobID,
+				"keywords_count", len(record.Keywords),
+				"source", record.Source,
+			)
+		}
+	}
+
+	if t.repo == nil {
+		err := fmt.Errorf("keyword repository not configured")
+		if t.logger != nil {
+			t.logger.Error("persist_keywords: repository not available", "err", err)
+		}
+		return nil, nil, err
+	}
+
 	if err := t.repo.PersistKeywords(ctx, params.Records); err != nil {
+		if t.logger != nil {
+			t.logger.Error("persist_keywords: failed to persist",
+				"err", err,
+				"records_count", len(params.Records),
+			)
+		}
 		return nil, nil, fmt.Errorf("failed to persist keywords: %w", err)
 	}
 
@@ -72,6 +111,15 @@ func (t persistKeywordsTool) handle(ctx context.Context, _ *sdkmcp.CallToolReque
 	}
 
 	result.Message = fmt.Sprintf("successfully persisted keywords for %d job(s)", result.SavedRecords)
+	
+	if t.logger != nil {
+		t.logger.Info("persist_keywords completed successfully",
+			"saved_records", result.SavedRecords,
+			"job_ids_count", len(result.JobIDs),
+			"job_ids", result.JobIDs,
+		)
+	}
+
 	msg := fmt.Sprintf("[persist_keywords] Persisted %d record(s) for %d job(s)", result.SavedRecords, len(result.JobIDs))
 	return textResult(msg), result, nil
 }

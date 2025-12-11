@@ -29,20 +29,25 @@ func NewToolRegistry(logger *logging.Logger) *ToolRegistry {
 
 func (r *ToolRegistry) RegisterAll(server *sdkmcp.Server, res Resources) error {
 	if err := tools.RegisterJobTools(server, res.JobService, r.logger); err != nil {
+		r.logger.Error("failed to register job tools", "err", err)
 		return err
 	}
 
-	if err := tools.RegisterAnalysisTools(server, res.KeywordRepo, res.AnalysisSvc); err != nil {
+	if err := tools.RegisterAnalysisTools(server, res.KeywordRepo, res.AnalysisSvc, r.logger); err != nil {
+		r.logger.Error("failed to register analysis tools", "err", err)
 		return err
 	}
 
 	if err := tools.RegisterExportTools(server, res.SheetsClient, res.JobRepo, r.logger); err != nil {
+		r.logger.Error("failed to register export tools", "err", err)
 		return err
 	}
 
-	if err := tools.RegisterGraphTool(server, res.Neo4jClient); err != nil {
+	if err := tools.RegisterGraphTool(server, res.Neo4jClient, r.logger); err != nil {
+		r.logger.Error("failed to register graph tool", "err", err)
 		return err
 	}
 
+	r.logger.Info("all MCP tools registered successfully")
 	return nil
 }

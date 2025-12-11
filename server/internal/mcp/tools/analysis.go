@@ -6,6 +6,8 @@ import (
 	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/honeycarbs/project-ets/pkg/logging"
 )
 
 // AnalysisService encapsulates graph/keyword reasoning logic
@@ -37,6 +39,7 @@ type JobAnalysisResult struct {
 
 type jobAnalysisTool struct {
 	service AnalysisService
+	logger  *logging.Logger
 }
 
 // WithJobAnalysis registers the job_analysis tool
@@ -50,30 +53,79 @@ func WithJobAnalysis(service AnalysisService) Option {
 	}
 }
 
-func RegisterAnalysisTools(server *sdkmcp.Server, repo KeywordRepository, svc AnalysisService) error {
-	handler := jobAnalysisTool{service: svc}
+func RegisterAnalysisTools(server *sdkmcp.Server, repo KeywordRepository, svc AnalysisService, logger *logging.Logger) error {
+	handler := jobAnalysisTool{service: svc, logger: logger}
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
 		Name:        "job_analysis",
 		Description: "Summarize stored job graphs against a candidate profile using Graph RAG",
 	}, handler.handle)
 
-	persistHandler := persistKeywordsTool{repo: repo}
+	persistHandler := persistKeywordsTool{repo: repo, logger: logger}
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
 		Name:        "persist_keywords",
 		Description: "Store agent-extracted keywords against existing job nodes",
 	}, persistHandler.handle)
 
+	if logger != nil {
+		logger.Info("analysis tools registered", "tools", []string{"job_analysis", "persist_keywords"})
+	}
 	return nil
 }
 
-func (t jobAnalysisTool) handle(ctx context.Context, _ *sdkmcp.CallToolRequest, params *JobAnalysisParams) (*sdkmcp.CallToolResult, any, error) {
+func (t jobAnalysisTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobAnalysisParams) (*sdkmcp.CallToolResult, any, error) {
+	if t.logger != nil {
+		t.logger.Debug("job_analysis called")
+	}
+
 	if params == nil {
 		params = &JobAnalysisParams{}
+		if t.logger != nil {
+			t.logger.Debug("job_analysis: params is nil, using empty params")
+		}
+	}
+
+	if t.logger != nil {
+		t.logger.Info("job_analysis request",
+			"job_ids_count", len(params.JobIDs),
+			"job_ids", params.JobIDs,
+			"has_profile", params.Profile != "",
+			"focus", params.Focus,
+		)
+	}
+
+	if t.service == nil {
+		err := fmt.Errorf("analysis service not configured")
+		if t.logger != nil {
+			t.logger.Error("job_analysis: service not available", "err", err)
+		}
+		return nil, nil, err
 	}
 
 	result, err := t.service.Analyze(ctx, *params)
 	if err != nil {
+		if t.logger != nil {
+			t.logger.Error("job_analysis: analysis failed",
+				"err", err,
+				"job_ids", params.JobIDs,
+			)
+		}
 		return nil, nil, fmt.Errorf("analysis failed: %w", err)
+	}
+
+	if t.logger != nil {
+		t.logger.Info("job_analysis completed successfully",
+			"jobs_analyzed", len(result.Jobs),
+			"generated_at", result.GeneratedAt,
+			"has_notes", result.Notes != "",
+		)
+		for i, job := range result.Jobs {
+			t.logger.Debug("job_analysis result",
+				"index", i,
+				"job_id", job.JobID,
+				"keywords_count", len(job.RecommendedKeywords),
+				"has_summary", job.Summary != "",
+			)
+		}
 	}
 
 	msg := t.formatResponse(result)

@@ -9,6 +9,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+
 	"github.com/honeycarbs/project-ets/internal/config"
 	"github.com/honeycarbs/project-ets/internal/domain/analysis"
 	"github.com/honeycarbs/project-ets/internal/domain/job"
@@ -17,6 +18,7 @@ import (
 	"github.com/honeycarbs/project-ets/internal/repository"
 	neo4j2 "github.com/honeycarbs/project-ets/internal/storage/neo4j"
 	"github.com/honeycarbs/project-ets/pkg/adzuna"
+	"github.com/honeycarbs/project-ets/pkg/logging"
 	"github.com/honeycarbs/project-ets/pkg/neo4j"
 	"github.com/honeycarbs/project-ets/pkg/sheets"
 )
@@ -24,7 +26,7 @@ import (
 // Injectors from wire.go:
 
 // InitializeResources creates Resources with all resources wired up
-func InitializeResources(ctx context.Context, cfg config.Config) (*Resources, error) {
+func InitializeResources(ctx context.Context, cfg config.Config, logger *logging.Logger) (*Resources, error) {
 	neo4jConfig := provideNeo4jConfig(cfg)
 	client, err := neo4j.NewClient(neo4jConfig)
 	if err != nil {
@@ -46,7 +48,7 @@ func InitializeResources(ctx context.Context, cfg config.Config) (*Resources, er
 		return nil, err
 	}
 	keywordRepository := neo4j2.NewKeywordRepository(client)
-	analysisRepository := neo4j2.NewAnalysisRepository(client)
+	analysisRepository := neo4j2.NewAnalysisRepository(client, logger)
 	analysisService := analysis.NewService(analysisRepository)
 	sheetsConfig := provideSheetsConfig(cfg)
 	sheetsClient, err := provideSheetsClient(ctx, sheetsConfig)

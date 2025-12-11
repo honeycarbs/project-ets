@@ -9,6 +9,7 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 
+	"github.com/honeycarbs/project-ets/pkg/logging"
 	pkgneo4j "github.com/honeycarbs/project-ets/pkg/neo4j"
 )
 
@@ -22,6 +23,7 @@ type GraphToolParams struct {
 
 type graphToolHandler struct {
 	client *pkgneo4j.Client
+	logger *logging.Logger
 }
 
 // WithGraphTool registers the graph_tool
@@ -35,30 +37,53 @@ func WithGraphTool(client *pkgneo4j.Client) Option {
 	}
 }
 
-func RegisterGraphTool(server *sdkmcp.Server, client *pkgneo4j.Client) error {
-	handler := graphToolHandler{client: client}
+func RegisterGraphTool(server *sdkmcp.Server, client *pkgneo4j.Client, logger *logging.Logger) error {
+	handler := graphToolHandler{client: client, logger: logger}
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
 		Name:        "graph_tool",
 		Description: "Developer tool for inspecting and debugging the Neo4j knowledge graph",
 	}, handler.handle)
+	if logger != nil {
+		logger.Info("graph_tool registered successfully")
+	}
 	return nil
 }
 
 func (h *graphToolHandler) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *GraphToolParams) (*sdkmcp.CallToolResult, any, error) {
+	if h.logger != nil {
+		h.logger.Debug("graph_tool called")
+	}
+
 	if h.client == nil {
-		return textResult("graph_tool unavailable: Neo4j client not configured"), nil, fmt.Errorf("Neo4j client not configured")
+		err := fmt.Errorf("Neo4j client not configured")
+		if h.logger != nil {
+			h.logger.Error("graph_tool: Neo4j client not available", "err", err)
+		}
+		return textResult("graph_tool unavailable: Neo4j client not configured"), nil, err
 	}
 
 	if params == nil {
-		return textResult("graph_tool requires parameters"), nil, fmt.Errorf("missing parameters")
+		err := fmt.Errorf("missing parameters")
+		if h.logger != nil {
+			h.logger.Warn("graph_tool: parameters are required")
+		}
+		return textResult("graph_tool requires parameters"), nil, err
 	}
 
 	var query string
 	var queryParams map[string]interface{}
+	queryType := ""
 
 	if params.Cypher != "" {
 		query = params.Cypher
 		queryParams = buildQueryParams(params)
+		queryType = "custom_cypher"
+		if h.logger != nil {
+			h.logger.Info("graph_tool: executing custom Cypher query",
+				"cypher", query,
+				"params_count", len(queryParams),
+			)
+		}
 	} else if params.JobID != "" {
 		query = `
 			MATCH (j:Job {id: $jobId})
@@ -70,48 +95,110 @@ func (h *graphToolHandler) handle(ctx context.Context, req *sdkmcp.CallToolReque
 			       collect(DISTINCT {value: k.value, source: hk.source}) as keywords
 		`
 		queryParams = map[string]interface{}{"jobId": params.JobID}
+		queryType = "job_inspection"
+		if h.logger != nil {
+			h.logger.Info("graph_tool: inspecting job",
+				"job_id", params.JobID,
+			)
+		}
 	} else {
 		query = "MATCH (n) RETURN labels(n) as labels, count(n) as count ORDER BY count DESC LIMIT 20"
 		queryParams = nil
+		queryType = "node_statistics"
+		if h.logger != nil {
+			h.logger.Info("graph_tool: fetching node statistics")
+		}
 	}
 
 	result, err := h.executeQuery(ctx, query, queryParams)
 	if err != nil {
+		if h.logger != nil {
+			h.logger.Error("graph_tool: query execution failed",
+				"err", err,
+				"query_type", queryType,
+				"query", query,
+			)
+		}
 		return textResult(fmt.Sprintf("graph_tool error: %v", err)), nil, err
+	}
+
+	if h.logger != nil {
+		h.logger.Info("graph_tool: query executed successfully",
+			"query_type", queryType,
+			"result_length", len(result),
+		)
+		h.logger.Debug("graph_tool: query result",
+			"result", result,
+		)
 	}
 
 	return textResult(result), nil, nil
 }
 
 func (h *graphToolHandler) executeQuery(ctx context.Context, query string, params map[string]interface{}) (string, error) {
+	if h.logger != nil {
+		h.logger.Debug("graph_tool: creating Neo4j session")
+	}
 	session := h.client.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
 	defer session.Close(ctx)
 
 	var allRecords []*neo4j.Record
 	var keys []string
 
+	if h.logger != nil {
+		h.logger.Debug("graph_tool: executing read transaction",
+			"query", query,
+			"has_params", params != nil,
+		)
+	}
+
 	_, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
 		result, err := tx.Run(ctx, query, params)
 		if err != nil {
+			if h.logger != nil {
+				h.logger.Error("graph_tool: failed to run query", "err", err)
+			}
 			return nil, err
 		}
 
+		recordCount := 0
 		for result.Next(ctx) {
 			record := result.Record()
 			if keys == nil {
 				keys = record.Keys
+				if h.logger != nil {
+					h.logger.Debug("graph_tool: query result keys", "keys", keys)
+				}
 			}
 			allRecords = append(allRecords, record)
+			recordCount++
+		}
+
+		if h.logger != nil {
+			h.logger.Debug("graph_tool: records collected", "count", recordCount)
 		}
 
 		if err := result.Err(); err != nil {
+			if h.logger != nil {
+				h.logger.Error("graph_tool: result iteration error", "err", err)
+			}
 			return nil, err
 		}
 
 		return nil, nil
 	})
 	if err != nil {
+		if h.logger != nil {
+			h.logger.Error("graph_tool: transaction failed", "err", err)
+		}
 		return "", fmt.Errorf("query execution failed: %w", err)
+	}
+
+	if h.logger != nil {
+		h.logger.Debug("graph_tool: formatting results",
+			"records_count", len(allRecords),
+			"keys_count", len(keys),
+		)
 	}
 
 	return h.formatCollectedResults(allRecords, keys)

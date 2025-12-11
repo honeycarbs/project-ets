@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/honeycarbs/project-ets/internal/domain"
 	"github.com/honeycarbs/project-ets/internal/repository"
+	"github.com/honeycarbs/project-ets/pkg/logging"
 	pkgneo4j "github.com/honeycarbs/project-ets/pkg/neo4j"
 )
 
@@ -17,11 +19,15 @@ var _ repository.AnalysisRepository = (*AnalysisRepository)(nil)
 // AnalysisRepository implements graph retrieval for job analysis
 type AnalysisRepository struct {
 	client *pkgneo4j.Client
+	logger *logging.Logger
 }
 
 // NewAnalysisRepository creates an analysis repository
-func NewAnalysisRepository(client *pkgneo4j.Client) *AnalysisRepository {
-	return &AnalysisRepository{client: client}
+func NewAnalysisRepository(client *pkgneo4j.Client, logger *logging.Logger) *AnalysisRepository {
+	return &AnalysisRepository{
+		client: client,
+		logger: logger,
+	}
 }
 
 // GetJobSubgraphs retrieves jobs with their skills and keywords
@@ -30,8 +36,33 @@ func (r *AnalysisRepository) GetJobSubgraphs(ctx context.Context, jobIDs []strin
 		return nil, nil
 	}
 
-	session := r.client.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
+	sessionConfig := neo4j.SessionConfig{
+		AccessMode: neo4j.AccessModeRead,
+		// DatabaseName: "", // empty means default database (usually "neo4j")
+	}
+	session := r.client.NewSession(ctx, sessionConfig)
 	defer session.Close(ctx)
+
+	// First, let's verify we can see ANY jobs at all
+	countQuery := "MATCH (j:Job) RETURN count(j) as total"
+	totalJobs, countErr := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		res, err := tx.Run(ctx, countQuery, nil)
+		if err != nil {
+			return 0, err
+		}
+		if res.Next(ctx) {
+			if total, found := res.Record().Get("total"); found {
+				return total, nil
+			}
+		}
+		return 0, res.Err()
+	})
+	if countErr == nil {
+		r.logger.Info("AnalysisRepository.GetJobSubgraphs: total jobs in database",
+			"total_jobs", totalJobs,
+			"database", sessionConfig.DatabaseName,
+		)
+	}
 
 	query := `
 		MATCH (j:Job)
@@ -44,14 +75,62 @@ func (r *AnalysisRepository) GetJobSubgraphs(ctx context.Context, jobIDs []strin
 		       collect(DISTINCT {value: k.value, source: hk.source}) as keywords
 	`
 
-	result, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-		return tx.Run(ctx, query, map[string]interface{}{"ids": jobIDs})
+	params := map[string]interface{}{"ids": jobIDs}
+
+	r.logger.Info("AnalysisRepository.GetJobSubgraphs: executing Neo4j query",
+		"job_ids", jobIDs,
+		"ids_count", len(jobIDs),
+		"database", sessionConfig.DatabaseName,
+		"query", query,
+		"params", params,
+	)
+
+	// Collect all records INSIDE the transaction
+	records, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		res, err := tx.Run(ctx, query, params)
+		if err != nil {
+			r.logger.Error("AnalysisRepository.GetJobSubgraphs: tx.Run failed", "err", err)
+			return nil, err
+		}
+		r.logger.Debug("AnalysisRepository.GetJobSubgraphs: tx.Run succeeded, collecting records")
+
+		// Collect all records into a slice while still in transaction
+		var allRecords []*neo4j.Record
+		for res.Next(ctx) {
+			allRecords = append(allRecords, res.Record())
+		}
+
+		if err := res.Err(); err != nil {
+			r.logger.Error("AnalysisRepository.GetJobSubgraphs: error iterating results", "err", err)
+			return nil, err
+		}
+
+		r.logger.Info("AnalysisRepository.GetJobSubgraphs: collected records from Neo4j",
+			"records_count", len(allRecords),
+		)
+
+		return allRecords, nil
 	})
 	if err != nil {
+		r.logger.Error("AnalysisRepository.GetJobSubgraphs: Neo4j query failed", "err", err)
 		return nil, err
 	}
 
-	return r.parseSubgraphResults(ctx, result.(neo4j.ResultWithContext))
+	r.logger.Debug("AnalysisRepository.GetJobSubgraphs: ExecuteRead completed, parsing results")
+
+	allRecords := records.([]*neo4j.Record)
+	subgraphs, err := r.parseSubgraphRecords(ctx, allRecords)
+	if err != nil {
+		r.logger.Error("AnalysisRepository.GetJobSubgraphs: failed to parse Neo4j results", "err", err)
+		return nil, err
+	}
+
+	r.logger.Debug("AnalysisRepository.GetJobSubgraphs: Neo4j query completed",
+		"requested_ids", jobIDs,
+		"subgraphs_count", len(subgraphs),
+	)
+
+	return subgraphs, nil
 }
 
 // FindRelatedJobs finds jobs connected via shared skills
@@ -71,17 +150,33 @@ func (r *AnalysisRepository) FindRelatedJobs(ctx context.Context, jobID string, 
 		LIMIT $limit
 	`
 
-	result, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-		return tx.Run(ctx, query, map[string]interface{}{
+	// Collect all records INSIDE the transaction
+	records, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		res, err := tx.Run(ctx, query, map[string]interface{}{
 			"jobId": jobID,
 			"limit": limit,
 		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Collect all records into a slice while still in transaction
+		var allRecords []*neo4j.Record
+		for res.Next(ctx) {
+			allRecords = append(allRecords, res.Record())
+		}
+
+		if err := res.Err(); err != nil {
+			return nil, err
+		}
+
+		return allRecords, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return r.parseRelatedResults(ctx, result.(neo4j.ResultWithContext))
+	return r.parseRelatedRecords(ctx, records.([]*neo4j.Record))
 }
 
 // GetSkillCooccurrences finds skills that commonly appear with given skills
@@ -104,34 +199,98 @@ func (r *AnalysisRepository) GetSkillCooccurrences(ctx context.Context, skills [
 		LIMIT $limit
 	`
 
-	result, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-		return tx.Run(ctx, query, map[string]interface{}{
+	// Collect all records INSIDE the transaction
+	records, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		res, err := tx.Run(ctx, query, map[string]interface{}{
 			"skills": skills,
 			"limit":  limit,
 		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Collect all records into a slice while still in transaction
+		var allRecords []*neo4j.Record
+		for res.Next(ctx) {
+			allRecords = append(allRecords, res.Record())
+		}
+
+		if err := res.Err(); err != nil {
+			return nil, err
+		}
+
+		return allRecords, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return r.parseCooccurrenceResults(ctx, result.(neo4j.ResultWithContext))
+	return r.parseCooccurrenceRecords(ctx, records.([]*neo4j.Record))
 }
 
-func (r *AnalysisRepository) parseSubgraphResults(ctx context.Context, records neo4j.ResultWithContext) ([]repository.JobSubgraph, error) {
-	subgraphs := make([]repository.JobSubgraph, 0)
+func (r *AnalysisRepository) parseSubgraphRecords(ctx context.Context, records []*neo4j.Record) ([]repository.JobSubgraph, error) {
+	subgraphs := make([]repository.JobSubgraph, 0, len(records))
 
-	for records.Next(ctx) {
-		record := records.Record()
+	r.logger.Debug("AnalysisRepository.parseSubgraphRecords: starting to parse Neo4j records",
+		"records_count", len(records),
+	)
+
+	for i, record := range records {
+		recordCount := i + 1
+
+		r.logger.Debug("AnalysisRepository.parseSubgraphRecords: processing record",
+			"record_index", recordCount,
+			"record_keys", record.Keys,
+		)
+
+		// Log the raw job node data
+		if jobVal, ok := record.Get("j"); ok {
+			r.logger.Debug("AnalysisRepository.parseSubgraphRecords: raw job node",
+				"record_index", recordCount,
+				"job_val_type", fmt.Sprintf("%T", jobVal),
+				"job_val", jobVal,
+			)
+		} else {
+			r.logger.Warn("AnalysisRepository.parseSubgraphRecords: record missing 'j' key",
+				"record_index", recordCount,
+			)
+		}
 
 		job, err := r.parseJobNode(record)
 		if err != nil {
+			r.logger.Error("AnalysisRepository.parseSubgraphRecords: failed to parse job node",
+				"record_index", recordCount,
+				"err", err,
+			)
+			return nil, fmt.Errorf("failed to parse job node at record %d: %w", recordCount, err)
+		}
+
+		// Check if we got an empty job (no error but also no valid job)
+		if job.ID == uuid.Nil {
+			r.logger.Warn("AnalysisRepository.parseSubgraphRecords: parsed job has nil ID, skipping",
+				"record_index", recordCount,
+			)
 			continue
 		}
+
+		r.logger.Debug("AnalysisRepository.parseSubgraphRecords: successfully parsed job",
+			"record_index", recordCount,
+			"job_id", job.ID.String(),
+			"job_title", job.Title,
+		)
 
 		job.Company = r.parseCompanyNode(record)
 		job.Skills = r.parseSkillNodes(record)
 
 		keywords := r.parseKeywordNodes(record)
+
+		r.logger.Debug("AnalysisRepository.parseSubgraphRecords: parsed job details",
+			"record_index", recordCount,
+			"job_id", job.ID.String(),
+			"company", job.Company.Name,
+			"skills_count", len(job.Skills),
+			"keywords_count", len(keywords),
+		)
 
 		subgraphs = append(subgraphs, repository.JobSubgraph{
 			Job:      job,
@@ -139,25 +298,56 @@ func (r *AnalysisRepository) parseSubgraphResults(ctx context.Context, records n
 		})
 	}
 
-	return subgraphs, records.Err()
+	r.logger.Info("AnalysisRepository.parseSubgraphRecords: completed parsing",
+		"total_records", len(records),
+		"subgraphs_created", len(subgraphs),
+	)
+
+	return subgraphs, nil
 }
 
 func (r *AnalysisRepository) parseJobNode(record *neo4j.Record) (domain.Job, error) {
 	jobVal, ok := record.Get("j")
 	if !ok {
+		r.logger.Debug("AnalysisRepository.parseJobNode: record does not contain 'j' key")
 		return domain.Job{}, nil
 	}
 
 	jobNode, ok := jobVal.(neo4j.Node)
 	if !ok {
+		r.logger.Warn("AnalysisRepository.parseJobNode: 'j' value is not a neo4j.Node",
+			"actual_type", fmt.Sprintf("%T", jobVal),
+			"value", jobVal,
+		)
 		return domain.Job{}, nil
 	}
 
 	props := jobNode.Props
-	jobID, err := uuid.Parse(getStringProp(props, "id"))
+	r.logger.Debug("AnalysisRepository.parseJobNode: extracted job node properties",
+		"props", props,
+		"props_count", len(props),
+	)
+
+	rawID := getStringProp(props, "id")
+	r.logger.Debug("AnalysisRepository.parseJobNode: attempting to parse job ID",
+		"raw_id", rawID,
+		"raw_id_length", len(rawID),
+	)
+
+	jobID, err := uuid.Parse(rawID)
 	if err != nil {
-		return domain.Job{}, err
+		r.logger.Error("AnalysisRepository.parseJobNode: UUID parse failed",
+			"raw_id", rawID,
+			"err", err,
+			"all_props", props,
+		)
+		return domain.Job{}, fmt.Errorf("parse job id %q: %w (props=%v)", rawID, err, props)
 	}
+
+	r.logger.Debug("AnalysisRepository.parseJobNode: successfully parsed job ID",
+		"job_id", jobID.String(),
+		"title", getStringProp(props, "title"),
+	)
 
 	return domain.Job{
 		ID:          jobID,
@@ -241,12 +431,10 @@ func (r *AnalysisRepository) parseKeywordNodes(record *neo4j.Record) []repositor
 	return keywords
 }
 
-func (r *AnalysisRepository) parseRelatedResults(ctx context.Context, records neo4j.ResultWithContext) ([]repository.RelatedJob, error) {
-	related := make([]repository.RelatedJob, 0)
+func (r *AnalysisRepository) parseRelatedRecords(ctx context.Context, records []*neo4j.Record) ([]repository.RelatedJob, error) {
+	related := make([]repository.RelatedJob, 0, len(records))
 
-	for records.Next(ctx) {
-		record := records.Record()
-
+	for _, record := range records {
 		job, err := r.parseJobNode(record)
 		if err != nil {
 			continue
@@ -264,15 +452,13 @@ func (r *AnalysisRepository) parseRelatedResults(ctx context.Context, records ne
 		})
 	}
 
-	return related, records.Err()
+	return related, nil
 }
 
-func (r *AnalysisRepository) parseCooccurrenceResults(ctx context.Context, records neo4j.ResultWithContext) ([]repository.SkillCooccurrence, error) {
-	cooccurrences := make([]repository.SkillCooccurrence, 0)
+func (r *AnalysisRepository) parseCooccurrenceRecords(ctx context.Context, records []*neo4j.Record) ([]repository.SkillCooccurrence, error) {
+	cooccurrences := make([]repository.SkillCooccurrence, 0, len(records))
 
-	for records.Next(ctx) {
-		record := records.Record()
-
+	for _, record := range records {
 		skill, _ := record.Get("skill")
 		cooccurs, _ := record.Get("cooccurs")
 		commonWith := getStringSlice(record, "commonWith")
@@ -284,7 +470,7 @@ func (r *AnalysisRepository) parseCooccurrenceResults(ctx context.Context, recor
 		})
 	}
 
-	return cooccurrences, records.Err()
+	return cooccurrences, nil
 }
 
 func getStringProp(props map[string]interface{}, key string) string {
@@ -368,4 +554,3 @@ func getRecordFloat(record *neo4j.Record, key string) float64 {
 	}
 	return 0
 }
-

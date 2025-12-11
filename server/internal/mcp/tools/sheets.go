@@ -79,10 +79,17 @@ func RegisterExportTools(server *sdkmcp.Server, client SheetsClient, repo reposi
 		Name:        "sheets_export",
 		Description: "Export job selections to Google Sheets via the sheets_client integrations",
 	}, handler.handle)
+	if logger != nil {
+		logger.Info("sheets_export tool registered successfully")
+	}
 	return nil
 }
 
-func (t sheetsExportTool) handle(ctx context.Context, _ *sdkmcp.CallToolRequest, params *SheetsExportParams) (*sdkmcp.CallToolResult, any, error) {
+func (t sheetsExportTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *SheetsExportParams) (*sdkmcp.CallToolResult, any, error) {
+	if t.logger != nil {
+		t.logger.Debug("sheets_export called")
+	}
+
 	if params == nil {
 		t.logWarn("sheets_export: parameters are required")
 		return textResult("sheets_export: parameters are required"), SheetsExportResult{}, fmt.Errorf("parameters are required")

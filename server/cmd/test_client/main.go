@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	testJobID1 = "bf2bae05-b452-4413-a852-e0ee8f0562b8"
-	testJobID2 = "4ac07b06-bac0-428d-ba63-1f88318ac81f"
+	testJobID1 = "d31e7d1b-e002-41c3-9c1c-48541db8199d"
+	testJobID2 = "7816628d-3486-4ba8-a03b-03faa39ecbcb"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 
 	log.Printf("Connected to server (session ID: %s)\n", session.ID())
 
-	testSheetsExport(ctx, session)
+	testJobAnalysis(ctx, session)
 
 	fmt.Println("\nAll tests completed")
 }
@@ -116,22 +116,6 @@ func testJobAnalysis(ctx context.Context, session *mcp.ClientSession) {
 
 	printResult(result)
 
-	fmt.Println("job_analysis with empty IDs")
-	paramsEmpty := &mcp.CallToolParams{
-		Name: "job_analysis",
-		Arguments: map[string]any{
-			"job_ids": []string{},
-			"profile": "Test profile",
-		},
-	}
-
-	resultEmpty, err := session.CallTool(ctx, paramsEmpty)
-	if err != nil {
-		log.Printf("job_analysis (empty) failed: %v", err)
-		return
-	}
-
-	printResult(resultEmpty)
 	fmt.Println("job_analysis passed")
 }
 

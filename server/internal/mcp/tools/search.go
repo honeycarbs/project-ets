@@ -71,23 +71,32 @@ func RegisterJobTools(server *sdkmcp.Server, jobSvc job.Service, logger *logging
 		Name:        "job_search",
 		Description: "Search external job boards/APIs, normalize, and store job postings",
 	}, handler.handle)
+	if logger != nil {
+		logger.Info("job_search tool registered successfully")
+	}
 	return nil
 }
 
 func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobSearchParams) (*sdkmcp.CallToolResult, any, error) {
+	if t.logger != nil {
+		t.logger.Debug("job_search called")
+	}
+
 	query := ""
 	location := ""
 	var skills []string
+	var remote *bool
 	if params != nil {
 		query = params.Query
 		location = params.Location
 		skills = params.Skills
+		remote = params.Remote
 	}
 
 	if t.service == nil {
 		msg := "job_search unavailable: no job service is configured"
 		if t.logger != nil {
-			t.logger.Warn(msg)
+			t.logger.Warn("job_search: service not available")
 		}
 		return textResult(msg), JobSearchResult{}, errors.New(msg)
 	}
@@ -97,13 +106,14 @@ func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, 
 			"query", query,
 			"location", location,
 			"skills", skills,
+			"remote", remote,
 		)
 	}
 
 	if query == "" {
 		err := fmt.Errorf("job_search: query is required")
 		if t.logger != nil {
-			t.logger.Warn("job_search missing query")
+			t.logger.Warn("job_search: missing required query parameter")
 		}
 		return textResult("job_search requires a non-empty query"), JobSearchResult{}, err
 	}
@@ -117,17 +127,35 @@ func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, 
 		filters.Remote = params.Remote
 	}
 
+	if t.logger != nil {
+		t.logger.Debug("job_search: calling service.Search",
+			"filters", fmt.Sprintf("%+v", filters),
+		)
+	}
+
 	serviceResult, err := t.service.Search(ctx, query, filters)
 	if err != nil {
 		if t.logger != nil {
-			t.logger.Error("job_search service failure", "err", err)
+			t.logger.Error("job_search: service failure",
+				"err", err,
+				"query", query,
+				"filters", fmt.Sprintf("%+v", filters),
+			)
 		}
 		return textResult(fmt.Sprintf("job_search failed: %v", err)), JobSearchResult{}, err
 	}
 
+	if t.logger != nil {
+		t.logger.Debug("job_search: service returned results",
+			"jobs_count", len(serviceResult.Jobs),
+			"source_count", serviceResult.SourceCount,
+			"fetched_at", serviceResult.FetchedAt,
+		)
+	}
+
 	jobs := make([]JobSearchJob, 0, len(serviceResult.Jobs))
-	for _, summary := range serviceResult.Jobs {
-		jobs = append(jobs, JobSearchJob{
+	for i, summary := range serviceResult.Jobs {
+		job := JobSearchJob{
 			ID:        summary.ID.String(),
 			Title:     summary.Title,
 			Company:   summary.Company,
@@ -137,7 +165,18 @@ func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, 
 			Source:    summary.Source,
 			Score:     summary.Score,
 			FetchedAt: serviceResult.FetchedAt,
-		})
+		}
+		jobs = append(jobs, job)
+		
+		if t.logger != nil {
+			t.logger.Debug("job_search: job processed",
+				"index", i,
+				"job_id", job.ID,
+				"title", job.Title,
+				"company", job.Company,
+				"source", job.Source,
+			)
+		}
 	}
 
 	result := JobSearchResult{
@@ -147,9 +186,10 @@ func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, 
 	}
 
 	if t.logger != nil {
-		t.logger.Info("job_search completed",
-			"jobs", len(jobs),
+		t.logger.Info("job_search completed successfully",
+			"jobs_count", len(jobs),
 			"sources", serviceResult.SourceCount,
+			"fetched_at", serviceResult.FetchedAt,
 		)
 	}
 
