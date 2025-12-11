@@ -152,6 +152,9 @@ func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, 
 		)
 	}
 
-	msg := fmt.Sprintf("[job_search] fetched %d job(s) from %d source(s)", len(jobs), serviceResult.SourceCount)
+	msg := fmt.Sprintf("[job_search] fetched %d job(s) from %d source(s)\n", len(jobs), serviceResult.SourceCount)
+	for _, j := range jobs {
+		msg += fmt.Sprintf("  • %s | %s at %s [%s]\n", j.ID, j.Title, j.Company, j.Location)
+	}
 	return textResult(msg), result, nil
 }
