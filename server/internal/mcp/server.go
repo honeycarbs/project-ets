@@ -96,8 +96,24 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) (*Server,
 		return mcpServer
 	}, nil)
 
+	// Wrap handler with CORS support for Cloud Run
+	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		
+		// Handle preflight OPTIONS request
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		
+		handler.ServeHTTP(w, r)
+	})
+
 	mux := http.NewServeMux()
-	mux.Handle("/mcp/stream", handler)
+	mux.Handle("/mcp/stream", corsHandler)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
