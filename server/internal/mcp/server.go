@@ -96,18 +96,26 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) (*Server,
 		return mcpServer
 	}, nil)
 
-	// Wrap handler with CORS support for Cloud Run
+	// Wrap handler with CORS support and logging for Cloud Run
 	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
 		
 		// Handle preflight OPTIONS request
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		
+		// Log connection attempt for debugging
+		log.Info("MCP stream connection attempt",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"content-type", r.Header.Get("Content-Type"),
+			"accept", r.Header.Get("Accept"),
+			"user-agent", r.Header.Get("User-Agent"))
 		
 		handler.ServeHTTP(w, r)
 	})
