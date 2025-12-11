@@ -36,6 +36,9 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # Copy the binary
 COPY --from=builder /app/server /app/server
 
+# Copy Google Sheets credentials file
+COPY --from=builder /build/.secrets/sheets-credentials.json /app/sheets-credentials.json
+
 # Expose port 8080 (Cloud Run will set PORT env var automatically)
 EXPOSE 8080
 
