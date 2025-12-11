@@ -110,7 +110,6 @@ func (s *service) Search(
 	for _, p := range s.providers {
 		jobs, err := p.Search(ctx, query, filters)
 		if err != nil {
-			// Log at caller
 			continue
 		}
 		if len(jobs) > 0 {

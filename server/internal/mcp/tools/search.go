@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -88,7 +89,7 @@ func (t jobSearchTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, 
 		if t.logger != nil {
 			t.logger.Warn(msg)
 		}
-		return textResult(msg), JobSearchResult{}, fmt.Errorf(msg)
+		return textResult(msg), JobSearchResult{}, errors.New(msg)
 	}
 
 	if t.logger != nil {

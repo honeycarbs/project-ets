@@ -58,25 +58,7 @@ func (h *graphToolHandler) handle(ctx context.Context, req *sdkmcp.CallToolReque
 
 	if params.Cypher != "" {
 		query = params.Cypher
-		hasParams := false
-		queryParams = make(map[string]interface{})
-		if params.JobID != "" {
-			queryParams["jobId"] = params.JobID
-			hasParams = true
-		}
-		if params.UserID != "" {
-			queryParams["userId"] = params.UserID
-			hasParams = true
-		}
-		if params.Filters != nil && len(params.Filters) > 0 {
-			for k, v := range params.Filters {
-				queryParams[k] = v
-			}
-			hasParams = true
-		}
-		if !hasParams {
-			queryParams = nil
-		}
+		queryParams = buildQueryParams(params)
 	} else if params.JobID != "" {
 		query = `
 			MATCH (j:Job {id: $jobId})
@@ -201,4 +183,23 @@ func (h *graphToolHandler) formatValue(val interface{}) string {
 		}
 		return string(jsonBytes)
 	}
+}
+
+func buildQueryParams(params *GraphToolParams) map[string]interface{} {
+	queryParams := make(map[string]interface{})
+
+	if params.JobID != "" {
+		queryParams["jobId"] = params.JobID
+	}
+	if params.UserID != "" {
+		queryParams["userId"] = params.UserID
+	}
+	for k, v := range params.Filters {
+		queryParams[k] = v
+	}
+
+	if len(queryParams) == 0 {
+		return nil
+	}
+	return queryParams
 }

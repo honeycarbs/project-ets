@@ -82,9 +82,7 @@ func RegisterExportTools(server *sdkmcp.Server, client SheetsClient, repo reposi
 	return nil
 }
 
-func (t sheetsExportTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *SheetsExportParams) (*sdkmcp.CallToolResult, any, error) {
-	_ = req
-
+func (t sheetsExportTool) handle(ctx context.Context, _ *sdkmcp.CallToolRequest, params *SheetsExportParams) (*sdkmcp.CallToolResult, any, error) {
 	if params == nil {
 		t.logWarn("sheets_export: parameters are required")
 		return textResult("sheets_export: parameters are required"), SheetsExportResult{}, fmt.Errorf("parameters are required")
@@ -163,8 +161,6 @@ func (t sheetsExportTool) handle(ctx context.Context, req *sdkmcp.CallToolReques
 	if result.CompletedAt.IsZero() {
 		result.CompletedAt = time.Now().UTC()
 	}
-	
-	// Preserve spreadsheet ID and tab from params if result doesn't have them
 	if result.SpreadsheetID == "" {
 		result.SpreadsheetID = params.Sheet.SpreadsheetID
 	}

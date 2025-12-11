@@ -66,9 +66,7 @@ func RegisterAnalysisTools(server *sdkmcp.Server, repo KeywordRepository, svc An
 	return nil
 }
 
-func (t jobAnalysisTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobAnalysisParams) (*sdkmcp.CallToolResult, any, error) {
-	_ = req
-
+func (t jobAnalysisTool) handle(ctx context.Context, _ *sdkmcp.CallToolRequest, params *JobAnalysisParams) (*sdkmcp.CallToolResult, any, error) {
 	if params == nil {
 		params = &JobAnalysisParams{}
 	}

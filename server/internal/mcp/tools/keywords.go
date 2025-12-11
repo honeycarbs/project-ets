@@ -52,9 +52,7 @@ func WithPersistKeywords(repo KeywordRepository) Option {
 	}
 }
 
-func (t persistKeywordsTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *PersistKeywordsParams) (*sdkmcp.CallToolResult, any, error) {
-	_ = req
-
+func (t persistKeywordsTool) handle(ctx context.Context, _ *sdkmcp.CallToolRequest, params *PersistKeywordsParams) (*sdkmcp.CallToolResult, any, error) {
 	result := PersistKeywordsResult{}
 	if params == nil || len(params.Records) == 0 {
 		result.Message = "no records provided"

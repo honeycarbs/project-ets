@@ -32,14 +32,6 @@ func main() {
 
 	log.Printf("Connected to server (session ID: %s)\n", session.ID())
 
-	// List available tools
-	//testListTools(ctx, session)
-
-	// Run independent tests
-	//testJobSearch(ctx, session)
-	//testPersistKeywords(ctx, session)
-	//testJobAnalysis(ctx, session)
-	//testGraphTool(ctx, session)
 	testSheetsExport(ctx, session)
 
 	fmt.Println("\nAll tests completed")
@@ -69,7 +61,6 @@ func testJobSearch(ctx context.Context, session *mcp.ClientSession) {
 func testPersistKeywords(ctx context.Context, session *mcp.ClientSession) {
 	fmt.Println("\nTEST: persist_keywords")
 
-	// Using hardcoded job IDs - independent of job_search
 	params := &mcp.CallToolParams{
 		Name: "persist_keywords",
 		Arguments: map[string]any{
@@ -97,7 +88,6 @@ func testPersistKeywords(ctx context.Context, session *mcp.ClientSession) {
 
 	result, err := session.CallTool(ctx, params)
 	if err != nil {
-		// Expected to fail if jobs don't exist in Neo4j - that's ok for this test
 		log.Printf("persist_keywords: %v (expected if test jobs don't exist)", err)
 		return
 	}
@@ -109,7 +99,6 @@ func testPersistKeywords(ctx context.Context, session *mcp.ClientSession) {
 func testJobAnalysis(ctx context.Context, session *mcp.ClientSession) {
 	fmt.Println("TEST: job_analysis")
 
-	// Test 1: With hardcoded job IDs
 	params := &mcp.CallToolParams{
 		Name: "job_analysis",
 		Arguments: map[string]any{
@@ -127,7 +116,6 @@ func testJobAnalysis(ctx context.Context, session *mcp.ClientSession) {
 
 	printResult(result)
 
-	// Test 2: With empty job IDs (edge case)
 	fmt.Println("job_analysis with empty IDs")
 	paramsEmpty := &mcp.CallToolParams{
 		Name: "job_analysis",
@@ -150,7 +138,6 @@ func testJobAnalysis(ctx context.Context, session *mcp.ClientSession) {
 func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 	fmt.Println("\nTEST: graph_tool")
 
-	// Test 1: Custom Cypher query - count all jobs
 	fmt.Println("\n  Test 1: Custom Cypher query (count jobs)")
 	params1 := &mcp.CallToolParams{
 		Name: "graph_tool",
@@ -166,7 +153,6 @@ func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 	}
 	printResult(result1)
 
-	// Test 2: Custom Cypher query - get node labels and counts
 	fmt.Println("\n  Test 2: Custom Cypher query (node labels)")
 	params2 := &mcp.CallToolParams{
 		Name: "graph_tool",
@@ -182,7 +168,6 @@ func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 	}
 	printResult(result2)
 
-	// Test 3: Job ID inspection (without cypher)
 	fmt.Println("\n  Test 3: Job ID inspection")
 	params3 := &mcp.CallToolParams{
 		Name: "graph_tool",
@@ -198,7 +183,6 @@ func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 	}
 	printResult(result3)
 
-	// Test 4: Default graph inspection (no parameters)
 	fmt.Println("\n  Test 4: Default graph inspection")
 	params4 := &mcp.CallToolParams{
 		Name:      "graph_tool",
@@ -212,7 +196,6 @@ func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 	}
 	printResult(result4)
 
-	// Test 5: Custom Cypher with filters
 	fmt.Println("\n  Test 5: Custom Cypher with job_id filter")
 	params5 := &mcp.CallToolParams{
 		Name: "graph_tool",
@@ -242,7 +225,6 @@ func testSheetsExport(ctx context.Context, session *mcp.ClientSession) {
 		return
 	}
 
-	// Test 1: Export with job IDs
 	fmt.Println("\n  Test 1: Export jobs by ID")
 	params1 := &mcp.CallToolParams{
 		Name: "sheets_export",
@@ -264,84 +246,6 @@ func testSheetsExport(ctx context.Context, session *mcp.ClientSession) {
 		printResult(result1)
 		fmt.Println("sheets_export (job IDs) passed")
 	}
-
-	//// Test 2: Export with explicit rows
-	//fmt.Println("\n  Test 2: Export explicit rows")
-	//fmt.Printf("    Spreadsheet ID: %s\n", spreadsheetID)
-	//fmt.Printf("    Number of rows: 2\n")
-	//params2 := &mcp.CallToolParams{
-	//	Name: "sheets_export",
-	//	Arguments: map[string]any{
-	//		"rows": []map[string]any{
-	//			{
-	//				"title":    "Software Engineer",
-	//				"company":  "Test Company",
-	//				"location": "Portland, OR",
-	//				"url":      "https://example.com/job/1",
-	//				"status":   "applied",
-	//				"notes":    "Go, Kubernetes, AWS",
-	//			},
-	//			{
-	//				"title":    "Senior Developer",
-	//				"company":  "Another Company",
-	//				"location": "Remote",
-	//				"url":      "https://example.com/job/2",
-	//				"status":   "interviewing",
-	//				"notes":    "Python, Machine Learning",
-	//			},
-	//		},
-	//		"sheet": map[string]any{
-	//			"spreadsheet_id": spreadsheetID,
-	//			"tab":            "Sheet1",
-	//		},
-	//		"upsert":    false,
-	//		"clear_tab": false,
-	//	},
-	//}
-	//
-	//result2, err := session.CallTool(ctx, params2)
-	//if err != nil {
-	//	log.Printf("sheets_export (explicit rows) failed with error: %v", err)
-	//	if result2 != nil {
-	//		printResult(result2)
-	//	}
-	//	return
-	//}
-	//printResult(result2)
-	//fmt.Println("sheets_export (explicit rows) completed")
-	//
-	//// Test 3: Export with filters
-	//fmt.Println("\n  Test 3: Export with filters")
-	//params3 := &mcp.CallToolParams{
-	//	Name: "sheets_export",
-	//	Arguments: map[string]any{
-	//		"job_ids": []string{testJobID1, testJobID2},
-	//		"filter": map[string]any{
-	//			"source": "adzuna",
-	//		},
-	//		"sheet": map[string]any{
-	//			"spreadsheet_id": spreadsheetID,
-	//			"tab":            "FilteredJobs",
-	//		},
-	//		"upsert":    false,
-	//		"clear_tab": false,
-	//	},
-	//}
-	//
-	//result3, err := session.CallTool(ctx, params3)
-	//if err != nil {
-	//	log.Printf("sheets_export (with filters) failed: %v", err)
-	//	if result3 != nil {
-	//		printResult(result3)
-	//	}
-	//	return
-	//}
-	//printResult(result3)
-	//if result3.IsError {
-	//	fmt.Println("sheets_export (with filters) returned error")
-	//	return
-	//}
-	//fmt.Println("sheets_export (with filters) passed")
 
 	fmt.Println("\nsheets_export tests completed")
 }

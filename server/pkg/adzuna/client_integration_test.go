@@ -16,7 +16,7 @@ func TestSearchJobsIntegration(t *testing.T) {
 	}
 
 	if appID == "" || appKey == "" {
-		t.Fatalf("ADZUNA_APP_ID and ADZUNA_APP_KEY must be set to run this test")
+		t.Skip("ADZUNA_APP_ID and ADZUNA_APP_KEY must be set to run this test")
 	}
 
 	client, err := NewClient(Config{
