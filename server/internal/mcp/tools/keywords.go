@@ -9,9 +9,8 @@ import (
 
 // KeywordEntry represents a single extracted keyword
 type KeywordEntry struct {
-	Value      string   `json:"value" jsonschema:"Keyword text"`
-	Confidence *float64 `json:"confidence,omitempty" jsonschema:"Optional confidence between 0-1"`
-	Notes      string   `json:"notes,omitempty" jsonschema:"Free-form annotation from the agent"`
+	Value string `json:"value" jsonschema:"Keyword text"`
+	Notes string `json:"notes,omitempty" jsonschema:"Free-form annotation from the agent"`
 }
 
 // KeywordRecord captures the keyword set for a given job

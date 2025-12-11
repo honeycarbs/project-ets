@@ -37,8 +37,7 @@ func (r *KeywordRepository) PersistKeywords(ctx context.Context, records []tools
 		WITH j, record
 		UNWIND record.keywords AS keyword
 		MERGE (k:Keyword {value: keyword.value})
-		SET k.confidence = coalesce(keyword.confidence, k.confidence),
-		    k.notes = coalesce(CASE WHEN keyword.notes <> "" THEN keyword.notes ELSE null END, k.notes)
+		SET k.notes = coalesce(CASE WHEN keyword.notes <> "" THEN keyword.notes ELSE null END, k.notes)
 		MERGE (j)-[rel:HAS_KEYWORD]->(k)
 		SET rel.createdAt = coalesce(rel.createdAt, datetime()),
 		    rel.source = coalesce(CASE WHEN record.source <> "" THEN record.source ELSE null END, rel.source)
@@ -50,9 +49,6 @@ func (r *KeywordRepository) PersistKeywords(ctx context.Context, records []tools
 		for _, keyword := range record.Keywords {
 			keywordData := map[string]interface{}{
 				"value": keyword.Value,
-			}
-			if keyword.Confidence != nil {
-				keywordData["confidence"] = *keyword.Confidence
 			}
 			if keyword.Notes != "" {
 				keywordData["notes"] = keyword.Notes
