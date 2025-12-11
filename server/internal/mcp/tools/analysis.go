@@ -140,7 +140,20 @@ func (t jobAnalysisTool) formatResponse(result JobAnalysisResult) string {
 	msg := fmt.Sprintf("[job_analysis] Retrieved %d job(s) with graph context\n", len(result.Jobs))
 
 	for _, job := range result.Jobs {
-		msg += fmt.Sprintf("\n• %s (keywords: %d)", job.Summary, len(job.RecommendedKeywords))
+		msg += fmt.Sprintf("\n• %s\n", job.Summary)
+
+		if len(job.RecommendedKeywords) > 0 {
+			msg += fmt.Sprintf("  Keywords (%d):\n", len(job.RecommendedKeywords))
+			for _, kw := range job.RecommendedKeywords {
+				if kw.Notes != "" {
+					msg += fmt.Sprintf("    - %s (%s)\n", kw.Value, kw.Notes)
+				} else {
+					msg += fmt.Sprintf("    - %s\n", kw.Value)
+				}
+			}
+		} else {
+			msg += "  Keywords: none\n"
+		}
 	}
 
 	return msg
