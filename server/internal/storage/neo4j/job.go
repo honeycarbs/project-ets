@@ -2,7 +2,7 @@ package neo4j
 
 import (
 	"context"
-	"time"
+	//"time"
 
 	"github.com/google/uuid"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
@@ -117,23 +117,36 @@ func (r *JobRepository) FindByIDs(ctx context.Context, ids []domain.JobID) ([]do
 		MATCH (j:Job)
 		WHERE j.id IN $ids
 		OPTIONAL MATCH (j)-[:WORKED_AT]->(c:Company)
+		WITH j, collect(DISTINCT c) as companies
 		OPTIONAL MATCH (j)-[:REQUIRES]->(s:Skill)
-		RETURN j, collect(DISTINCT c) as companies, collect(DISTINCT s) as skills
+		WITH j, companies, collect(DISTINCT s) as skills
+		RETURN j, companies, skills
 	`
 
-	result, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-		return tx.Run(ctx, query, map[string]interface{}{"ids": idStrings})
+	var allRecords []*neo4j.Record
+	_, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		result, err := tx.Run(ctx, query, map[string]interface{}{"ids": idStrings})
+		if err != nil {
+			return nil, err
+		}
+
+		for result.Next(ctx) {
+			allRecords = append(allRecords, result.Record())
+		}
+
+		if err := result.Err(); err != nil {
+			return nil, err
+		}
+
+		return nil, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	records := result.(neo4j.ResultWithContext)
 	jobs := make([]domain.Job, 0)
 
-	for records.Next(ctx) {
-		record := records.Record()
-
+	for _, record := range allRecords {
 		jobVal, ok := record.Get("j")
 		if !ok {
 			continue
@@ -144,7 +157,11 @@ func (r *JobRepository) FindByIDs(ctx context.Context, ids []domain.JobID) ([]do
 		}
 
 		props := jobNode.Props
-		jobID, err := uuid.Parse(props["id"].(string))
+		jobIDStr := getStringProp(props, "id")
+		if jobIDStr == "" {
+			continue
+		}
+		jobID, err := uuid.Parse(jobIDStr)
 		if err != nil {
 			continue
 		}
@@ -152,12 +169,15 @@ func (r *JobRepository) FindByIDs(ctx context.Context, ids []domain.JobID) ([]do
 		var company domain.CompanyRef
 		companiesVal, ok := record.Get("companies")
 		if ok {
-			if companiesList, ok := companiesVal.([]interface{}); ok && len(companiesList) > 0 {
-				if companyNode, ok := companiesList[0].(neo4j.Node); ok {
-					companyProps := companyNode.Props
-					company = domain.CompanyRef{
-						ID:   companyProps["id"].(string),
-						Name: companyProps["name"].(string),
+			if companiesList, ok := companiesVal.([]interface{}); ok {
+				for _, companyVal := range companiesList {
+					if companyNode, ok := companyVal.(neo4j.Node); ok {
+						companyProps := companyNode.Props
+						company = domain.CompanyRef{
+							ID:   getStringProp(companyProps, "id"),
+							Name: getStringProp(companyProps, "name"),
+						}
+						break
 					}
 				}
 			}
@@ -171,53 +191,35 @@ func (r *JobRepository) FindByIDs(ctx context.Context, ids []domain.JobID) ([]do
 					if skillNode, ok := skillVal.(neo4j.Node); ok {
 						skillProps := skillNode.Props
 						jobSkills = append(jobSkills, domain.SkillRef{
-							ID:   skillProps["id"].(string),
-							Name: skillProps["name"].(string),
+							ID:   getStringProp(skillProps, "id"),
+							Name: getStringProp(skillProps, "name"),
 						})
 					}
 				}
 			}
 		}
 
-		var postedAt, fetchedAt time.Time
-		if postedAtVal, ok := props["postedAt"]; ok {
-			if dt, ok := postedAtVal.(time.Time); ok {
-				postedAt = dt
-			} else if dt, ok := postedAtVal.(neo4j.LocalDateTime); ok {
-				postedAt = dt.Time()
-			}
-		}
-		if fetchedAtVal, ok := props["fetchedAt"]; ok {
-			if dt, ok := fetchedAtVal.(time.Time); ok {
-				fetchedAt = dt
-			} else if dt, ok := fetchedAtVal.(neo4j.LocalDateTime); ok {
-				fetchedAt = dt.Time()
-			}
-		}
+		postedAt := getTimeProp(props, "postedAt")
+		fetchedAt := getTimeProp(props, "fetchedAt")
 
 		job := domain.Job{
 			ID:          jobID,
-			Title:       props["title"].(string),
+			Title:       getStringProp(props, "title"),
 			Company:     company,
-			Location:    props["location"].(string),
-			Remote:      props["remote"].(bool),
-			URL:         props["url"].(string),
-			Source:      props["source"].(string),
-			ExternalID:  props["externalId"].(string),
+			Location:    getStringProp(props, "location"),
+			Remote:      getBoolProp(props, "remote"),
+			URL:         getStringProp(props, "url"),
+			Source:      getStringProp(props, "source"),
+			ExternalID:  getStringProp(props, "externalId"),
 			PostedAt:    postedAt,
-			Description: props["description"].(string),
+			Description: getStringProp(props, "description"),
 			Skills:      jobSkills,
-			Score:       props["score"].(float64),
+			Score:       getFloatProp(props, "score"),
 			FetchedAt:   fetchedAt,
 		}
 
 		jobs = append(jobs, job)
 	}
 
-	if err := records.Err(); err != nil {
-		return nil, err
-	}
-
 	return jobs, nil
 }
-

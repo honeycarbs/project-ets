@@ -5,6 +5,7 @@ import (
 
 	"github.com/honeycarbs/project-ets/internal/domain/job"
 	"github.com/honeycarbs/project-ets/internal/mcp/tools"
+	"github.com/honeycarbs/project-ets/internal/repository"
 	"github.com/honeycarbs/project-ets/pkg/logging"
 	n4j "github.com/honeycarbs/project-ets/pkg/neo4j"
 )
@@ -15,6 +16,7 @@ type ToolRegistry struct {
 
 type Resources struct {
 	JobService   job.Service
+	JobRepo      repository.JobRepository
 	KeywordRepo  tools.KeywordRepository
 	AnalysisSvc  tools.AnalysisService
 	SheetsClient tools.SheetsClient
@@ -34,7 +36,7 @@ func (r *ToolRegistry) RegisterAll(server *sdkmcp.Server, res Resources) error {
 		return err
 	}
 
-	if err := tools.RegisterExportTools(server, res.SheetsClient); err != nil {
+	if err := tools.RegisterExportTools(server, res.SheetsClient, res.JobRepo, r.logger); err != nil {
 		return err
 	}
 

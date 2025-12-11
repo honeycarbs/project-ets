@@ -4,15 +4,17 @@ import (
 	"context"
 
 	"github.com/honeycarbs/project-ets/internal/config"
+	"github.com/honeycarbs/project-ets/internal/domain"
 	"github.com/honeycarbs/project-ets/internal/mcp/tools"
 	"github.com/honeycarbs/project-ets/pkg/logging"
 )
 
-func initializeResources(cfg config.Config, logger *logging.Logger) (*Resources, error) {
-	res, err := InitializeResources(cfg)
+func initializeResources(ctx context.Context, cfg config.Config, logger *logging.Logger) (*Resources, error) {
+	res, err := InitializeResources(ctx, cfg)
 	if err != nil {
 		logger.Warn("failed to initialize resources", "err", err)
 		return &Resources{
+			JobRepo:      stubJobRepository{},
 			KeywordRepo:  stubKeywordRepository{},
 			AnalysisSvc:  stubAnalysisService{},
 			SheetsClient: stubSheetsClient{},
@@ -25,6 +27,20 @@ func initializeResources(cfg config.Config, logger *logging.Logger) (*Resources,
 	}
 
 	return res, nil
+}
+
+type stubJobRepository struct{}
+
+func (stubJobRepository) UpsertJobs(ctx context.Context, jobs []domain.Job) error {
+	_ = ctx
+	_ = jobs
+	return nil
+}
+
+func (stubJobRepository) FindByIDs(ctx context.Context, ids []domain.JobID) ([]domain.Job, error) {
+	_ = ctx
+	_ = ids
+	return nil, nil
 }
 
 type stubKeywordRepository struct{}

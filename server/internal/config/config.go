@@ -20,8 +20,10 @@ type Config struct {
 		URI      string
 		Username string
 		Password string
-	} 
-	// TODO: add OpenAIKey, SheetsCredsPath
+	}
+	Sheets struct {
+		CredentialsPath string
+	}
 }
 
 // Load populates config from environment variables
@@ -55,6 +57,8 @@ func Load() (Config, error) {
 	cfg.Neo4j.URI = os.Getenv("NEO4J_URI")
 	cfg.Neo4j.Username = os.Getenv("NEO4J_USERNAME")
 	cfg.Neo4j.Password = os.Getenv("NEO4J_PASSWORD")
+
+	cfg.Sheets.CredentialsPath = os.Getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
 
 	var missingVars []string
 

@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
-	// Hardcoded test data - each test is independent
-	testJobID1 = "550e8400-e29b-41d4-a716-446655440001"
-	testJobID2 = "550e8400-e29b-41d4-a716-446655440002"
+	testJobID1 = "bf2bae05-b452-4413-a852-e0ee8f0562b8"
+	testJobID2 = "4ac07b06-bac0-428d-ba63-1f88318ac81f"
 )
 
 func main() {
@@ -39,7 +39,8 @@ func main() {
 	//testJobSearch(ctx, session)
 	//testPersistKeywords(ctx, session)
 	//testJobAnalysis(ctx, session)
-	testGraphTool(ctx, session)
+	//testGraphTool(ctx, session)
+	testSheetsExport(ctx, session)
 
 	fmt.Println("\nAll tests completed")
 }
@@ -160,7 +161,7 @@ func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 
 	result1, err := session.CallTool(ctx, params1)
 	if err != nil {
-		log.Printf("✗ graph_tool (cypher count) failed: %v", err)
+		log.Printf("graph_tool (cypher count) failed: %v", err)
 		return
 	}
 	printResult(result1)
@@ -176,7 +177,7 @@ func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 
 	result2, err := session.CallTool(ctx, params2)
 	if err != nil {
-		log.Printf("✗ graph_tool (cypher labels) failed: %v", err)
+		log.Printf("graph_tool (cypher labels) failed: %v", err)
 		return
 	}
 	printResult(result2)
@@ -192,7 +193,7 @@ func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 
 	result3, err := session.CallTool(ctx, params3)
 	if err != nil {
-		log.Printf("✗ graph_tool (job_id) failed: %v", err)
+		log.Printf("graph_tool (job_id) failed: %v", err)
 		return
 	}
 	printResult(result3)
@@ -206,7 +207,7 @@ func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 
 	result4, err := session.CallTool(ctx, params4)
 	if err != nil {
-		log.Printf("✗ graph_tool (default) failed: %v", err)
+		log.Printf("graph_tool (default) failed: %v", err)
 		return
 	}
 	printResult(result4)
@@ -223,12 +224,126 @@ func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
 
 	result5, err := session.CallTool(ctx, params5)
 	if err != nil {
-		log.Printf("✗ graph_tool (cypher with filter) failed: %v", err)
+		log.Printf("graph_tool (cypher with filter) failed: %v", err)
 		return
 	}
 	printResult(result5)
 
 	fmt.Println("\ngraph_tool all tests passed")
+}
+
+func testSheetsExport(ctx context.Context, session *mcp.ClientSession) {
+	fmt.Println("\nTEST: sheets_export")
+
+	spreadsheetID := os.Getenv("TEST_SPREADSHEET_ID")
+	if spreadsheetID == "" {
+		fmt.Println("TEST_SPREADSHEET_ID not set. Set it to your Google Sheet ID.")
+		fmt.Println("Example: export TEST_SPREADSHEET_ID='your-spreadsheet-id-here'")
+		return
+	}
+
+	// Test 1: Export with job IDs
+	fmt.Println("\n  Test 1: Export jobs by ID")
+	params1 := &mcp.CallToolParams{
+		Name: "sheets_export",
+		Arguments: map[string]any{
+			"job_ids": []string{testJobID1, testJobID2},
+			"sheet": map[string]any{
+				"spreadsheet_id": spreadsheetID,
+				"tab":            "Sheet1",
+			},
+			"upsert":    false,
+			"clear_tab": false,
+		},
+	}
+
+	result1, err := session.CallTool(ctx, params1)
+	if err != nil {
+		log.Printf("sheets_export (job IDs) failed: %v", err)
+	} else {
+		printResult(result1)
+		fmt.Println("sheets_export (job IDs) passed")
+	}
+
+	//// Test 2: Export with explicit rows
+	//fmt.Println("\n  Test 2: Export explicit rows")
+	//fmt.Printf("    Spreadsheet ID: %s\n", spreadsheetID)
+	//fmt.Printf("    Number of rows: 2\n")
+	//params2 := &mcp.CallToolParams{
+	//	Name: "sheets_export",
+	//	Arguments: map[string]any{
+	//		"rows": []map[string]any{
+	//			{
+	//				"title":    "Software Engineer",
+	//				"company":  "Test Company",
+	//				"location": "Portland, OR",
+	//				"url":      "https://example.com/job/1",
+	//				"status":   "applied",
+	//				"notes":    "Go, Kubernetes, AWS",
+	//			},
+	//			{
+	//				"title":    "Senior Developer",
+	//				"company":  "Another Company",
+	//				"location": "Remote",
+	//				"url":      "https://example.com/job/2",
+	//				"status":   "interviewing",
+	//				"notes":    "Python, Machine Learning",
+	//			},
+	//		},
+	//		"sheet": map[string]any{
+	//			"spreadsheet_id": spreadsheetID,
+	//			"tab":            "Sheet1",
+	//		},
+	//		"upsert":    false,
+	//		"clear_tab": false,
+	//	},
+	//}
+	//
+	//result2, err := session.CallTool(ctx, params2)
+	//if err != nil {
+	//	log.Printf("sheets_export (explicit rows) failed with error: %v", err)
+	//	if result2 != nil {
+	//		printResult(result2)
+	//	}
+	//	return
+	//}
+	//printResult(result2)
+	//fmt.Println("sheets_export (explicit rows) completed")
+	//
+	//// Test 3: Export with filters
+	//fmt.Println("\n  Test 3: Export with filters")
+	//params3 := &mcp.CallToolParams{
+	//	Name: "sheets_export",
+	//	Arguments: map[string]any{
+	//		"job_ids": []string{testJobID1, testJobID2},
+	//		"filter": map[string]any{
+	//			"source": "adzuna",
+	//		},
+	//		"sheet": map[string]any{
+	//			"spreadsheet_id": spreadsheetID,
+	//			"tab":            "FilteredJobs",
+	//		},
+	//		"upsert":    false,
+	//		"clear_tab": false,
+	//	},
+	//}
+	//
+	//result3, err := session.CallTool(ctx, params3)
+	//if err != nil {
+	//	log.Printf("sheets_export (with filters) failed: %v", err)
+	//	if result3 != nil {
+	//		printResult(result3)
+	//	}
+	//	return
+	//}
+	//printResult(result3)
+	//if result3.IsError {
+	//	fmt.Println("sheets_export (with filters) returned error")
+	//	return
+	//}
+	//fmt.Println("sheets_export (with filters) passed")
+
+	fmt.Println("\nsheets_export tests completed")
 }
 
 func printResult(res *mcp.CallToolResult) {

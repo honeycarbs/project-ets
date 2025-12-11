@@ -4,6 +4,9 @@
 package mcp
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/google/wire"
 
 	"github.com/honeycarbs/project-ets/internal/config"
@@ -15,10 +18,11 @@ import (
 	storage "github.com/honeycarbs/project-ets/internal/storage/neo4j"
 	"github.com/honeycarbs/project-ets/pkg/adzuna"
 	n4j "github.com/honeycarbs/project-ets/pkg/neo4j"
+	sheetsclient "github.com/honeycarbs/project-ets/pkg/sheets"
 )
 
 // InitializeResources creates Resources with all resources wired up
-func InitializeResources(cfg config.Config) (*Resources, error) {
+func InitializeResources(ctx context.Context, cfg config.Config) (*Resources, error) {
 	wire.Build(
 		// Infrastructure - Neo4j
 		provideNeo4jConfig,
@@ -31,6 +35,7 @@ func InitializeResources(cfg config.Config) (*Resources, error) {
 		// Repositories
 		storage.NewJobRepository,
 		wire.Bind(new(job.Repository), new(*storage.JobRepository)),
+		wire.Bind(new(repository.JobRepository), new(*storage.JobRepository)),
 		storage.NewKeywordRepository,
 		wire.Bind(new(tools.KeywordRepository), new(*storage.KeywordRepository)),
 		storage.NewAnalysisRepository,
@@ -45,8 +50,10 @@ func InitializeResources(cfg config.Config) (*Resources, error) {
 		analysis.NewService,
 		wire.Bind(new(tools.AnalysisService), new(*analysis.Service)),
 
-		// Tool resources - stubs
-		provideStubSheetsClient,
+		// Tool resources
+		provideSheetsConfig,
+		provideSheetsClient,
+		provideSheetsClientAdapter,
 		newResources,
 	)
 
@@ -81,21 +88,38 @@ func provideJobProviders(adzunaProvider *adzunaProvider.Provider) []job.Provider
 	return []job.Provider{adzunaProvider}
 }
 
-// provideStubSheetsClient provides stub sheets client
-func provideStubSheetsClient() stubSheetsClient {
-	return stubSheetsClient{}
+// provideSheetsConfig extracts Sheets config from main config
+func provideSheetsConfig(cfg config.Config) sheetsclient.Config {
+	return sheetsclient.Config{
+		CredentialsPath: cfg.Sheets.CredentialsPath,
+	}
+}
+
+// provideSheetsClient creates a Sheets client
+func provideSheetsClient(ctx context.Context, cfg sheetsclient.Config) (*sheetsclient.Client, error) {
+	if cfg.CredentialsPath == "" {
+		return nil, fmt.Errorf("sheets: GOOGLE_SHEETS_CREDENTIALS_PATH is not set")
+	}
+	return sheetsclient.NewClient(ctx, cfg)
+}
+
+// provideSheetsClientAdapter creates a SheetsClient adapter
+func provideSheetsClientAdapter(client *sheetsclient.Client) tools.SheetsClient {
+	return &sheetsClientAdapter{client: client}
 }
 
 // newResources creates Resources struct
 func newResources(
 	jobService job.Service,
+	jobRepo repository.JobRepository,
 	keywordRepo tools.KeywordRepository,
 	analysisSvc tools.AnalysisService,
-	sheetsClient stubSheetsClient,
+	sheetsClient tools.SheetsClient,
 	neo4jClient *n4j.Client,
 ) *Resources {
 	return &Resources{
 		JobService:   jobService,
+		JobRepo:      jobRepo,
 		KeywordRepo:  keywordRepo,
 		AnalysisSvc:  analysisSvc,
 		SheetsClient: sheetsClient,

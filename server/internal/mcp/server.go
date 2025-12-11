@@ -75,10 +75,12 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) (*Server,
 
 	mcpServer := sdkmcp.NewServer(impl, nil)
 
-	res, err := initializeResources(cfg, log)
+	ctx := context.Background()
+	res, err := initializeResources(ctx, cfg, log)
 	if err != nil {
 		log.Warn("failed to initialize resources", "err", err)
 		res = &Resources{
+			JobRepo:      stubJobRepository{},
 			KeywordRepo:  stubKeywordRepository{},
 			AnalysisSvc:  stubAnalysisService{},
 			SheetsClient: stubSheetsClient{},
