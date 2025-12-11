@@ -36,9 +36,9 @@ func main() {
 	//testListTools(ctx, session)
 
 	// Run independent tests
-	testJobSearch(ctx, session)
-	testPersistKeywords(ctx, session)
-	testJobAnalysis(ctx, session)
+	//testJobSearch(ctx, session)
+	//testPersistKeywords(ctx, session)
+	//testJobAnalysis(ctx, session)
 	testGraphTool(ctx, session)
 
 	fmt.Println("\nAll tests completed")
@@ -147,24 +147,88 @@ func testJobAnalysis(ctx context.Context, session *mcp.ClientSession) {
 }
 
 func testGraphTool(ctx context.Context, session *mcp.ClientSession) {
-	fmt.Println("TEST: graph_tool")
+	fmt.Println("\nTEST: graph_tool")
 
-	params := &mcp.CallToolParams{
+	// Test 1: Custom Cypher query - count all jobs
+	fmt.Println("\n  Test 1: Custom Cypher query (count jobs)")
+	params1 := &mcp.CallToolParams{
 		Name: "graph_tool",
 		Arguments: map[string]any{
-			"job_id": testJobID1,
 			"cypher": "MATCH (j:Job) RETURN count(j) as total",
 		},
 	}
 
-	result, err := session.CallTool(ctx, params)
+	result1, err := session.CallTool(ctx, params1)
 	if err != nil {
-		log.Printf("✗ graph_tool failed: %v", err)
+		log.Printf("✗ graph_tool (cypher count) failed: %v", err)
 		return
 	}
+	printResult(result1)
 
-	printResult(result)
-	fmt.Println("graph_tool passed")
+	// Test 2: Custom Cypher query - get node labels and counts
+	fmt.Println("\n  Test 2: Custom Cypher query (node labels)")
+	params2 := &mcp.CallToolParams{
+		Name: "graph_tool",
+		Arguments: map[string]any{
+			"cypher": "MATCH (n) RETURN labels(n) as labels, count(n) as count ORDER BY count DESC LIMIT 10",
+		},
+	}
+
+	result2, err := session.CallTool(ctx, params2)
+	if err != nil {
+		log.Printf("✗ graph_tool (cypher labels) failed: %v", err)
+		return
+	}
+	printResult(result2)
+
+	// Test 3: Job ID inspection (without cypher)
+	fmt.Println("\n  Test 3: Job ID inspection")
+	params3 := &mcp.CallToolParams{
+		Name: "graph_tool",
+		Arguments: map[string]any{
+			"job_id": testJobID1,
+		},
+	}
+
+	result3, err := session.CallTool(ctx, params3)
+	if err != nil {
+		log.Printf("✗ graph_tool (job_id) failed: %v", err)
+		return
+	}
+	printResult(result3)
+
+	// Test 4: Default graph inspection (no parameters)
+	fmt.Println("\n  Test 4: Default graph inspection")
+	params4 := &mcp.CallToolParams{
+		Name:      "graph_tool",
+		Arguments: map[string]any{},
+	}
+
+	result4, err := session.CallTool(ctx, params4)
+	if err != nil {
+		log.Printf("✗ graph_tool (default) failed: %v", err)
+		return
+	}
+	printResult(result4)
+
+	// Test 5: Custom Cypher with filters
+	fmt.Println("\n  Test 5: Custom Cypher with job_id filter")
+	params5 := &mcp.CallToolParams{
+		Name: "graph_tool",
+		Arguments: map[string]any{
+			"cypher": "MATCH (j:Job {id: $jobId})-[:REQUIRES]->(s:Skill) RETURN j.title as title, collect(s.name) as skills",
+			"job_id": testJobID1,
+		},
+	}
+
+	result5, err := session.CallTool(ctx, params5)
+	if err != nil {
+		log.Printf("✗ graph_tool (cypher with filter) failed: %v", err)
+		return
+	}
+	printResult(result5)
+
+	fmt.Println("\ngraph_tool all tests passed")
 }
 
 func printResult(res *mcp.CallToolResult) {

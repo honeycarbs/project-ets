@@ -38,7 +38,7 @@ func (r *ToolRegistry) RegisterAll(server *sdkmcp.Server, res Resources) error {
 		return err
 	}
 
-	if err := tools.RegisterGraphTool(server); err != nil {
+	if err := tools.RegisterGraphTool(server, res.Neo4jClient); err != nil {
 		return err
 	}
 
