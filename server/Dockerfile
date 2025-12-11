@@ -1,6 +1,4 @@
 # Build stage
-# Note: If your go.mod specifies a different Go version, adjust this accordingly
-# Go 1.23 is used here as 1.25.3 doesn't exist in Docker Hub
 FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
