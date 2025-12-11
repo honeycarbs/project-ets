@@ -27,6 +27,21 @@ type Server struct {
 	neo4jClient *n4j.Client
 }
 
+// flushWriter wraps ResponseWriter to force immediate flushing for SSE streaming
+// This combats Cloud Run's HTTP/2 buffering behavior
+type flushWriter struct {
+	http.ResponseWriter
+	flusher http.Flusher
+}
+
+func (fw *flushWriter) Write(p []byte) (n int, err error) {
+	n, err = fw.ResponseWriter.Write(p)
+	if err == nil && fw.flusher != nil {
+		fw.flusher.Flush()
+	}
+	return
+}
+
 // Option allows callers to customize server resources
 type Option func(*Resources)
 
@@ -96,17 +111,22 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) (*Server,
 		return mcpServer
 	}, nil)
 
-	// Wrap handler with CORS support and SSE headers for Cloud Run
+	// Wrap handler with CORS support and SSE optimization for Cloud Run
 	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
 		
-		// Disable buffering for SSE (critical for Cloud Run)
+		// Critical headers to disable buffering for SSE on Cloud Run
+		// Based on: https://docs.cloud.google.com/appengine/docs/flexible/how-requests-are-handled
 		w.Header().Set("X-Accel-Buffering", "no")
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Connection", "keep-alive")
+		
+		// Force chunked transfer encoding to prevent buffering
+		// Reference: https://www.googlecloudcommunity.com/gc/Serverless/Fastapi-StreamingResponse-on-Cloud-Run/td-p/874965
+		w.Header().Set("Transfer-Encoding", "chunked")
 		
 		// Handle preflight OPTIONS request
 		if r.Method == "OPTIONS" {
@@ -122,7 +142,14 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) (*Server,
 			"accept", r.Header.Get("Accept"),
 			"user-agent", r.Header.Get("User-Agent"))
 		
-		handler.ServeHTTP(w, r)
+		// Wrap response writer with auto-flushing for SSE
+		// This forces immediate data transmission to combat Cloud Run's HTTP/2 buffering
+		if flusher, ok := w.(http.Flusher); ok {
+			fw := &flushWriter{ResponseWriter: w, flusher: flusher}
+			handler.ServeHTTP(fw, r)
+		} else {
+			handler.ServeHTTP(w, r)
+		}
 	})
 
 	mux := http.NewServeMux()

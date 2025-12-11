@@ -505,7 +505,7 @@ func main() {
 
 	mcpEndpoint := os.Getenv("MCP_URL")
 	if mcpEndpoint == "" {
-		mcpEndpoint = "http://localhost:8080"
+		mcpEndpoint = "https://mcp-server-541024611315.us-west1.run.app:8080"
 	}
 	
 	if !strings.HasSuffix(mcpEndpoint, "/mcp/stream") {
