@@ -15,29 +15,17 @@ type AnalysisService interface {
 
 // JobAnalysisParams defines the arguments for the job_analysis tool
 type JobAnalysisParams struct {
-	JobIDs           []string                 `json:"job_ids,omitempty" jsonschema:"Existing job identifiers stored in Neo4j"`
-	Profile          string                   `json:"profile,omitempty" jsonschema:"Free-form resume/profile to compare"`
-	Focus            string                   `json:"focus,omitempty" jsonschema:"Optional analysis instruction"`
-	KeywordOverrides []KeywordOverridePayload `json:"keyword_overrides,omitempty" jsonschema:"Optional keywords supplied by the agent for temporary analysis"`
+	JobIDs  []string `json:"job_ids,omitempty" jsonschema:"Job identifiers stored in Neo4j"`
+	Profile string   `json:"profile,omitempty" jsonschema:"Free-form resume/profile to compare"`
+	Focus   string   `json:"focus,omitempty" jsonschema:"Optional analysis instruction"`
 }
 
-// KeywordOverridePayload allows callers to provide adhoc keyword lists per job
-type KeywordOverridePayload struct {
-	JobID    string         `json:"job_id" jsonschema:"Job identifier"`
-	Keywords []KeywordEntry `json:"keywords" jsonschema:"Keyword list overriding stored values"`
-	Notes    string         `json:"notes,omitempty" jsonschema:"Optional annotation for the override"`
-}
-
-// JobAnalysisSummary captures per-job analysis output
+// JobAnalysisSummary captures per-job graph context for LLM analysis
 type JobAnalysisSummary struct {
-	JobID          string         `json:"job_id" jsonschema:"Analyzed job identifier"`
-	MatchScore     float64        `json:"match_score,omitempty" jsonschema:"Estimated fit score between 0-1"`
-	Highlights     []string       `json:"highlights,omitempty" jsonschema:"Reasons this job matches the profile"`
-	Gaps           []string       `json:"gaps,omitempty" jsonschema:"Missing or weak skills"`
-	Recommended    []KeywordEntry `json:"recommended_keywords,omitempty" jsonschema:"Keywords to emphasize"`
-	Summary        string         `json:"summary,omitempty" jsonschema:"Natural language digest of findings"`
-	NextActions    []string       `json:"next_actions,omitempty" jsonschema:"Suggested follow-up tasks"`
-	SupportingData map[string]any `json:"supporting_data,omitempty" jsonschema:"Optional structured analysis artifacts"`
+	JobID               string         `json:"job_id" jsonschema:"Job identifier"`
+	Summary             string         `json:"summary,omitempty" jsonschema:"Job title and company"`
+	RecommendedKeywords []KeywordEntry `json:"keywords,omitempty" jsonschema:"Extracted keywords from graph"`
+	SupportingData      map[string]any `json:"data,omitempty" jsonschema:"Full job context for LLM analysis"`
 }
 
 // JobAnalysisResult is the structured response of job_analysis
@@ -79,22 +67,31 @@ func RegisterAnalysisTools(server *sdkmcp.Server, repo KeywordRepository, svc An
 }
 
 func (t jobAnalysisTool) handle(ctx context.Context, req *sdkmcp.CallToolRequest, params *JobAnalysisParams) (*sdkmcp.CallToolResult, any, error) {
-	_ = ctx
 	_ = req
-	_ = t.service
 
-	var jobIDs []string
-	focus := ""
-	if params != nil {
-		jobIDs = params.JobIDs
-		focus = params.Focus
+	if params == nil {
+		params = &JobAnalysisParams{}
 	}
 
-	now := time.Now().UTC()
-	result := JobAnalysisResult{
-		GeneratedAt: now,
+	result, err := t.service.Analyze(ctx, *params)
+	if err != nil {
+		return nil, nil, fmt.Errorf("analysis failed: %w", err)
 	}
 
-	msg := fmt.Sprintf("[job_analysis] Stub implementation: received %d job id(s) with focus=%q", len(jobIDs), focus)
+	msg := t.formatResponse(result)
 	return textResult(msg), result, nil
+}
+
+func (t jobAnalysisTool) formatResponse(result JobAnalysisResult) string {
+	if len(result.Jobs) == 0 {
+		return "[job_analysis] No jobs found for provided IDs"
+	}
+
+	msg := fmt.Sprintf("[job_analysis] Retrieved %d job(s) with graph context\n", len(result.Jobs))
+
+	for _, job := range result.Jobs {
+		msg += fmt.Sprintf("\n• %s (keywords: %d)", job.Summary, len(job.RecommendedKeywords))
+	}
+
+	return msg
 }

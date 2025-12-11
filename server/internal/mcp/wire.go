@@ -7,9 +7,11 @@ import (
 	"github.com/google/wire"
 
 	"github.com/honeycarbs/project-ets/internal/config"
+	"github.com/honeycarbs/project-ets/internal/domain/analysis"
 	"github.com/honeycarbs/project-ets/internal/domain/job"
 	adzunaProvider "github.com/honeycarbs/project-ets/internal/domain/job/providers/adzuna"
 	"github.com/honeycarbs/project-ets/internal/mcp/tools"
+	"github.com/honeycarbs/project-ets/internal/repository"
 	storage "github.com/honeycarbs/project-ets/internal/storage/neo4j"
 	"github.com/honeycarbs/project-ets/pkg/adzuna"
 	n4j "github.com/honeycarbs/project-ets/pkg/neo4j"
@@ -31,6 +33,8 @@ func InitializeResources(cfg config.Config) (*Resources, error) {
 		wire.Bind(new(job.Repository), new(*storage.JobRepository)),
 		storage.NewKeywordRepository,
 		wire.Bind(new(tools.KeywordRepository), new(*storage.KeywordRepository)),
+		storage.NewAnalysisRepository,
+		wire.Bind(new(repository.AnalysisRepository), new(*storage.AnalysisRepository)),
 
 		// Providers
 		provideAdzunaProvider,
@@ -38,9 +42,10 @@ func InitializeResources(cfg config.Config) (*Resources, error) {
 
 		// Services
 		job.NewServiceWithDeps,
+		analysis.NewService,
+		wire.Bind(new(tools.AnalysisService), new(*analysis.Service)),
 
 		// Tool resources - stubs
-		provideStubAnalysisService,
 		provideStubSheetsClient,
 		newResources,
 	)
@@ -76,11 +81,6 @@ func provideJobProviders(adzunaProvider *adzunaProvider.Provider) []job.Provider
 	return []job.Provider{adzunaProvider}
 }
 
-// provideStubAnalysisService provides stub analysis service
-func provideStubAnalysisService() stubAnalysisService {
-	return stubAnalysisService{}
-}
-
 // provideStubSheetsClient provides stub sheets client
 func provideStubSheetsClient() stubSheetsClient {
 	return stubSheetsClient{}
@@ -90,7 +90,7 @@ func provideStubSheetsClient() stubSheetsClient {
 func newResources(
 	jobService job.Service,
 	keywordRepo tools.KeywordRepository,
-	analysisSvc stubAnalysisService,
+	analysisSvc tools.AnalysisService,
 	sheetsClient stubSheetsClient,
 	neo4jClient *n4j.Client,
 ) *Resources {
