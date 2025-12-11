@@ -96,12 +96,17 @@ func NewServer(log *logging.Logger, cfg config.Config, opts ...Option) (*Server,
 		return mcpServer
 	}, nil)
 
-	// Wrap handler with CORS support and logging for Cloud Run
+	// Wrap handler with CORS support and SSE headers for Cloud Run
 	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
+		
+		// Disable buffering for SSE (critical for Cloud Run)
+		w.Header().Set("X-Accel-Buffering", "no")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Connection", "keep-alive")
 		
 		// Handle preflight OPTIONS request
 		if r.Method == "OPTIONS" {
